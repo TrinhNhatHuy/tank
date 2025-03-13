@@ -5,8 +5,11 @@ WIDTH = 800
 HEIGHT = 600
 SIZE_TANK = 25
 walls=[]
-bullets=[]
+bullets_blue =[]
 bullets_holdoff = 0
+bullets_holdoff_blue = 0
+bullets_holdoff_sand = 0
+bullets_sand = []
 enemy_move_count = 0
 enemy_bullets = []
 game_over = False
@@ -15,18 +18,21 @@ enemies = []
 number_of_enemies = 5
 level = 0
 
-tank = Actor('tank_blue')
-tank2 = Actor('tank_dark')
+tank_blue = Actor('tank_blue')
+tank_sand = Actor('tank_sand')
 background = Actor('grass')
 
 def start_game(number_of_enemies):
-    global game_over, level_up, enemies, bullets, bullets_holdoff, enemy_bullets,walls
+    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls
     game_over=False
     level_up = False
     enemies = []
     walls = []
-    bullets = []
+    bullets_blue =[]
     bullets_holdoff = 0
+    bullets_holdoff_sand = 0
+    bullets_holdoff_blue = 0
+    bullets_sand = []
     enemy_bullets = []
     
 #enemy tank
@@ -41,11 +47,11 @@ def start_game(number_of_enemies):
         enemy.angle =270
         enemies.append(enemy)
 #ally tank
-    tank.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
-    tank.angle = 90
+    tank_blue.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
+    tank_blue.angle = 90
     
-    tank2.pos = (WIDTH/2 - 50, HEIGHT - SIZE_TANK)
-    tank2.angle = 90
+    tank_sand.pos = (WIDTH/2 - 50, HEIGHT - SIZE_TANK)
+    tank_sand.angle = 90
 #set up environment
     for x in range(16):
         for y in range(10):
@@ -56,40 +62,17 @@ def start_game(number_of_enemies):
                 walls.append(wall)
 #set up ally tank
 def tank_set():
-    move_tank(tank, keyboard.left, keyboard.right, keyboard.up, keyboard.down)
-    move_tank2(tank2, keyboard.a,keyboard.d,keyboard.w, keyboard.s)
+    move_tank_blue(tank_blue, keyboard.left, keyboard.right, keyboard.up, keyboard.down)
+    move_tank_sand(tank_sand, keyboard.a,keyboard.d,keyboard.w, keyboard.s)
     
-def move_tank2(tank, left, right, up, down):  
+def move_tank_sand(tank, left, right, up, down):  
     original_x = tank.x
     original_y = tank.y
     if left:
-        tank.x = tank.x -6
+        tank.x = tank.x - 2
         tank.angle =180
     elif right:
-        tank.x = tank.x +6
-        tank.angle = 0
-    elif up:
-        tank.y = tank.y - 6
-        tank.angle = 90
-    elif down:
-        tank.y =  tank.y + 6
-        tank.angle =270
-        
-    if tank.collidelist(walls)!= -1:
-        tank.x = original_x
-        tank.y = original_y
-    if tank.x < SIZE_TANK or tank.x>(WIDTH-SIZE_TANK)or tank.y < SIZE_TANK or tank.y > (HEIGHT-SIZE_TANK):  
-        tank.x = original_x
-        tank.y = original_y
-    
-def move_tank(tank, left, right, up, down):  
-    original_x = tank.x
-    original_y = tank.y
-    if left:
-        tank.x = tank.x -2
-        tank.angle =180
-    elif right:
-        tank.x = tank.x +2
+        tank.x = tank.x + 2
         tank.angle = 0
     elif up:
         tank.y = tank.y - 2
@@ -104,18 +87,40 @@ def move_tank(tank, left, right, up, down):
     if tank.x < SIZE_TANK or tank.x>(WIDTH-SIZE_TANK)or tank.y < SIZE_TANK or tank.y > (HEIGHT-SIZE_TANK):  
         tank.x = original_x
         tank.y = original_y
+    
+def move_tank_blue(tank, left, right, up, down):  
+    original_x = tank.x
+    original_y = tank.y
+    if left:
+        tank.x = tank.x -2
+        tank.angle = 180
+    elif right:
+        tank.x = tank.x +2
+        tank.angle = 0
+    elif up:
+        tank.y = tank.y - 2
+        tank.angle = 90
+    elif down:
+        tank.y =  tank.y + 2
+        tank.angle = 270
+        
+    if tank.collidelist(walls)!= -1:
+        tank.x = original_x
+        tank.y = original_y
+    if tank.x < SIZE_TANK or tank.x>(WIDTH-SIZE_TANK)or tank.y < SIZE_TANK or tank.y > (HEIGHT-SIZE_TANK):  
+        tank.x = original_x
+        tank.y = original_y
 #setup ally bullet
 def tank_bullets_set():
-    global bullets_holdoff
-    shoot_bullet(tank, lambda:keyboard.l)
-    shoot_bullet2(tank2, lambda:keyboard.f)
+    shoot_bullet_blue(tank_blue, keyboard.l)
+    shoot_bullet_sand(tank_sand, keyboard.f)
     
-def shoot_bullet2(tank, key):
-    global bullets_holdoff,level_up
+def shoot_bullet_sand(tank, key):
+    global bullets_holdoff_sand,level_up
     
-    if bullets_holdoff==0 and key:
+    if bullets_holdoff_sand == 0 and key:
         
-        bullet = Actor ('bulletdark2')
+        bullet = Actor ('bulletsand2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
             bullet.pos = (tank.x + SIZE_TANK, tank.y)
@@ -125,43 +130,43 @@ def shoot_bullet2(tank, key):
             bullet.pos = (tank.x, tank.y - SIZE_TANK)
         elif bullet.angle ==270:
             bullet.pos = (tank.x, tank.y + SIZE_TANK)
-        bullets.append(bullet)
-        bullets_holdoff = 50
+        bullets_sand.append(bullet)
+        bullets_holdoff_sand = 20
     else:
-        bullets_holdoff -= 1
+        bullets_holdoff_sand = max(0, bullets_holdoff_sand - 1)
     
-    for bullet in bullets:
+    for bullet in bullets_sand:
         if bullet.angle == 0:
-            bullet.x += 20
+            bullet.x += 3
         if bullet.angle ==180:
-            bullet.x -= 20
+            bullet.x -= 3
         if bullet.angle == 90:
-            bullet.y -= 20
+            bullet.y -= 3
         if bullet.angle == 270:
-            bullet.y += 20
+            bullet.y += 3
     
-    for bullet in bullets[:]:
+    for bullet in bullets_sand[:]:
         walls_index = bullet.collidelist(walls)
         if walls_index != -1:
             del walls[walls_index]
-            bullets.remove(bullet)
+            bullets_sand.remove(bullet)
         
         if bullet.x < 0 or bullet.x > WIDTH or bullet.y < 0 or bullet.y >HEIGHT:
-            bullets.remove(bullet)
+            bullets_sand.remove(bullet)
         
         enemy_index = bullet.collidelist(enemies)
         if enemy_index != -1:
             del enemies[enemy_index]
-            bullets.remove(bullet)
+            bullets_sand.remove(bullet)
             continue
         
         if not enemies:
             level_up = True
 
-def shoot_bullet(tank, key):
-    global bullets_holdoff,level_up
+def shoot_bullet_blue(tank, key):
+    global bullets_holdoff_blue,level_up
     
-    if bullets_holdoff==0 and key:
+    if bullets_holdoff_blue==0 and key:
         
         bullet = Actor ('bulletblue2')
         bullet.angle = tank.angle
@@ -173,34 +178,34 @@ def shoot_bullet(tank, key):
             bullet.pos = (tank.x, tank.y - SIZE_TANK)
         elif bullet.angle ==270:
             bullet.pos = (tank.x, tank.y + SIZE_TANK)
-        bullets.append(bullet)
-        bullets_holdoff = 20
+        bullets_blue.append(bullet)
+        bullets_holdoff_blue = 20
     else:
-        bullets_holdoff -= 1
+        bullets_holdoff_blue = max(0, bullets_holdoff_blue - 1)
     
-    for bullet in bullets:
+    for bullet in bullets_blue:
         if bullet.angle == 0:
-            bullet.x += 5
+            bullet.x += 3
         if bullet.angle ==180:
-            bullet.x -= 5
+            bullet.x -= 3
         if bullet.angle == 90:
-            bullet.y -= 5
+            bullet.y -= 3
         if bullet.angle == 270:
-            bullet.y += 5
+            bullet.y += 3
     
-    for bullet in bullets[:]:
+    for bullet in bullets_blue[:]:
         walls_index = bullet.collidelist(walls)
         if walls_index != -1:
             del walls[walls_index]
-            bullets.remove(bullet)
+            bullets_blue.remove(bullet)
         
         if bullet.x < 0 or bullet.x > WIDTH or bullet.y < 0 or bullet.y >HEIGHT:
-            bullets.remove(bullet)
+            bullets_blue.remove(bullet)
         
         enemy_index = bullet.collidelist(enemies)
         if enemy_index != -1:
             del enemies[enemy_index]
-            bullets.remove(bullet)
+            bullets_blue.remove(bullet)
             continue
         
         if not enemies:
@@ -247,7 +252,9 @@ def enemy_set():
                 bullet.angle = enemy.angle
                 bullet.pos = enemy.pos
                 enemy_bullets.append(bullet)
-                bullets_holdoff = 40
+                bullets_holdoff = 20
+            else:
+                bullets_holdoff = max(0, bullets_holdoff - 1)
 
 def enemy_bullets_set():
     global enemies, game_over
@@ -272,7 +279,7 @@ def enemy_bullets_set():
                 enemy_bullets.remove(bullet)
                 continue
             
-            if bullet.colliderect(tank) or bullet.colliderect(tank2):
+            if bullet.colliderect(tank_blue) or bullet.colliderect(tank_sand):
                 game_over = True 
                 enemies = []
                 break
@@ -310,11 +317,13 @@ def draw():
         
         background.draw()
         screen.draw.text('Level : ' + str(level) ,(WIDTH/2 -80, HEIGHT/2 -50),color = (255,255,100), fontsize = 100)
-        tank.draw()
-        tank2.draw()
+        tank_blue.draw()
+        tank_sand.draw()
         for wall in walls:
             wall.draw()
-        for bullet in bullets:
+        for bullet in bullets_blue:
+            bullet.draw()
+        for bullet in bullets_sand:
             bullet.draw()
         for enemy in enemies:
             enemy.draw()
