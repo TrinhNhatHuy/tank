@@ -12,23 +12,26 @@ bullets_holdoff_blue = 0
 bullets_holdoff_sand = 0
 enemy_move_count = 0
 enemy_bullets = []
-game_over = False
-level_up = False
 enemies = []
 speed_list = []
 laser_list = []
+tank_dealth = []
+
 number_of_enemies = 5
 level = 0
 boost_blue = 0
 boost_sand = 0
 
+game_over = False
+level_up = False
 
 tank_blue = Actor('tank_blue')
 tank_sand = Actor('tank_sand')
+our_tank = [tank_blue, tank_sand]
 background = Actor('grass')
 
 def start_game(number_of_enemies):
-    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls,speed_list,laser_list,boost_sand, boost_blue
+    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue
     game_over=False
     level_up = False
     enemies = []
@@ -43,8 +46,9 @@ def start_game(number_of_enemies):
     laser_list = []
     boost_sand = 0
     boost_blue = 0
+    tank_dealth = []
     
-#enemy tank
+# enemy tank
     for i in range(number_of_enemies):
         enemy = Actor('tank_red')
         posi = i*100 + 50
@@ -55,13 +59,15 @@ def start_game(number_of_enemies):
         enemy.y = SIZE_TANK
         enemy.angle =270
         enemies.append(enemy)
-#ally tank
+# ally tank
     tank_blue.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
     tank_blue.angle = 90
     
     tank_sand.pos = (WIDTH/2 - 50, HEIGHT - SIZE_TANK)
     tank_sand.angle = 90
-#set up environment
+    our_tank = [tank_blue, tank_sand]
+    
+# set up environment
     for x in range(16):
         for y in range(10):
             if random.randint(0,100) < 50:
@@ -69,7 +75,8 @@ def start_game(number_of_enemies):
                 wall.x = x*50 + SIZE_TANK
                 wall.y = y*50 +SIZE_TANK*3
                 walls.append(wall)
-#set up ally tank
+
+# set up ally tank
 def tank_set():
     move_tank_blue(tank_blue, keyboard.left, keyboard.right, keyboard.up, keyboard.down)
     move_tank_sand(tank_sand, keyboard.a,keyboard.d,keyboard.w, keyboard.s)
@@ -141,16 +148,15 @@ def move_tank_blue(tank, left, right, up, down):
     for laser in laser_list[:]:
         if laser.colliderect(tank_blue):
             laser_list.remove(laser)
+
 #setup ally bullet
 def tank_bullets_set():
     shoot_bullet_blue(tank_blue, keyboard.l)
     shoot_bullet_sand(tank_sand, keyboard.f)
     
 def shoot_bullet_sand(tank, key):
-    global bullets_holdoff_sand,level_up
-    
-    if bullets_holdoff_sand == 0 and key:
-        
+    global bullets_holdoff_sand,level_up, tank_dealth
+    if bullets_holdoff_sand == 0 and key: 
         bullet = Actor ('bulletsand2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -187,6 +193,9 @@ def shoot_bullet_sand(tank, key):
         
         enemy_index = bullet.collidelist(enemies)
         if enemy_index != -1:
+            death_tank = Actor('tank_dark')
+            death_tank.pos = enemies[enemy_index].pos
+            tank_dealth.append(death_tank)
             del enemies[enemy_index]
             bullets_sand.remove(bullet)
             continue
@@ -195,10 +204,8 @@ def shoot_bullet_sand(tank, key):
             level_up = True
 
 def shoot_bullet_blue(tank, key):
-    global bullets_holdoff_blue,level_up
-    
+    global bullets_holdoff_blue,level_up, tank_dealth
     if bullets_holdoff_blue==0 and key:
-        
         bullet = Actor ('bulletblue2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -235,6 +242,9 @@ def shoot_bullet_blue(tank, key):
         
         enemy_index = bullet.collidelist(enemies)
         if enemy_index != -1:
+            death_tank = Actor('tank_dark')
+            death_tank.pos = enemies[enemy_index].pos
+            tank_dealth.append(death_tank)
             del enemies[enemy_index]
             bullets_blue.remove(bullet)
             continue
@@ -245,7 +255,6 @@ def shoot_bullet_blue(tank, key):
 def enemy_set():
     global enemy_move_count, bullets_holdoff 
     for enemy in enemies:
-
         original_x=enemy.x
         original_y =enemy.y
         choice = random.randint(0,2)
@@ -269,14 +278,12 @@ def enemy_set():
             if enemy.collidelist(walls) != -1:
                 enemy.x = original_x
                 enemy.y = original_y
-                enemy_move_count = 0
-
+                enemy_move_count = 0;
 
         elif choice == 0:
                 enemy_move_count =30
         elif choice == 1: #enemy tank change direction
-                enemy.angle = random.choice([0,90,180,270])
-                
+                enemy.angle = random.choice([0,90,180,270])     
         else: #enemy fire
             if bullets_holdoff == 0:
                 bullet = Actor('bulletred2')
@@ -288,7 +295,7 @@ def enemy_set():
                 bullets_holdoff = max(0, bullets_holdoff - 1)
 
 def enemy_bullets_set():
-    global enemies, game_over
+    global enemies, game_over, our_tank
     for bullet in enemy_bullets:
         if bullet.angle == 0:
             bullet.x +=5
@@ -309,8 +316,17 @@ def enemy_bullets_set():
             if bullet.x < 0 or bullet.x >WIDTH or bullet.y < 0 or bullet.y >HEIGHT:
                 enemy_bullets.remove(bullet)
                 continue
+
+            ally_index = bullet.collidelist(our_tank)
+            if ally_index != -1:
+                death_tank = Actor('tank_dark')
+                death_tank.pos = our_tank[ally_index].pos
+                tank_dealth.append(death_tank)
+                del our_tank[ally_index]
+                enemy_bullets.remove(bullet)
+                continue
             
-            if bullet.colliderect(tank_blue) or bullet.colliderect(tank_sand):
+            if not our_tank:
                 game_over = True 
                 enemies = []
                 break
@@ -363,7 +379,6 @@ def update():
         enemy_set()
         enemy_bullets_set()
         
-        
 def draw(): 
     global level
     if game_over:
@@ -377,11 +392,10 @@ def draw():
         screen.draw.text('press q to exit', (10,10), color=(255,255,255),fontsize=20)
         screen.draw.text('press r to restart', (10, HEIGHT-10),color = (255,255,255),fontsize=20)
     else:
-        
         background.draw()
         screen.draw.text('Level : ' + str(level) ,(WIDTH/2 -80, HEIGHT/2 -50),color = (255,255,100), fontsize = 100)
-        tank_blue.draw()
-        tank_sand.draw()
+        for tank in our_tank:
+            tank.draw()
         for wall in walls:
             wall.draw()
         for bullet in bullets_blue:
@@ -396,6 +410,8 @@ def draw():
             laser.draw()
         for speed in speed_list:
             speed.draw()
+        for death_tank in tank_dealth:
+            death_tank.draw()
             
 start_game(number_of_enemies)
 pgzrun.go()
