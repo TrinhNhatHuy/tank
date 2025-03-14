@@ -1,4 +1,4 @@
-                                                TANK GAME WITH PYTHON 
+                                              TANK GAME WITH PYTHON 
 ___________________________________________________________________________
 
 Members Info:     
