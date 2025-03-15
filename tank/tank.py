@@ -25,13 +25,17 @@ boost_sand = 0
 game_over = False
 level_up = False
 
+has_laser_blue = False
+has_laser_sand = False
+
 tank_blue = Actor('tank_blue')
 tank_sand = Actor('tank_sand')
 our_tank = [tank_blue, tank_sand]
 background = Actor('grass')
 
 def start_game(number_of_enemies):
-    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue
+    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue,has_laser_blue,has_laser_sand
+
     game_over=False
     level_up = False
     enemies = []
@@ -47,6 +51,8 @@ def start_game(number_of_enemies):
     boost_sand = 0
     boost_blue = 0
     tank_dealth = []
+    has_laser_blue = False
+    has_laser_sand = False
     
 # enemy tank
     for i in range(number_of_enemies):
@@ -82,7 +88,7 @@ def tank_set():
     move_tank_sand(tank_sand, keyboard.a,keyboard.d,keyboard.w, keyboard.s)
     
 def move_tank_sand(tank, left, right, up, down):
-    global boost_sand
+    global boost_sand, has_laser_sand
     original_x = tank.x
     original_y = tank.y
     if left:
@@ -115,9 +121,10 @@ def move_tank_sand(tank, left, right, up, down):
     for laser in laser_list[:]:
         if laser.colliderect(tank_sand):
             laser_list.remove(laser)
-           
+            has_laser_sand = True
+
 def move_tank_blue(tank, left, right, up, down): 
-    global boost_blue
+    global boost_blue, has_laser_blue
     original_x = tank.x
     original_y = tank.y
     if left:
@@ -143,14 +150,15 @@ def move_tank_blue(tank, left, right, up, down):
     for speed in speed_list[:]:
         if speed.colliderect(tank_blue):
             speed_list.remove(speed)
+
             if (boost_blue != 2):
                 boost_blue += 2
                 clock.schedule_unique(reset_boost_blue, 5.0)
-
-    
+        
     for laser in laser_list[:]:
         if laser.colliderect(tank_blue):
             laser_list.remove(laser)
+            has_laser_blue = True
 
 #setup ally bullet
 def tank_bullets_set():
@@ -158,8 +166,14 @@ def tank_bullets_set():
     shoot_bullet_sand(tank_sand, keyboard.f)
     
 def shoot_bullet_sand(tank, key):
-    global bullets_holdoff_sand,level_up, tank_dealth
-    if bullets_holdoff_sand == 0 and key: 
+    global bullets_holdoff_sand,level_up, tank_dealth, has_laser_sand
+    
+    if has_laser_sand and key:
+        shoot_laser(tank,enemies, walls)
+        has_laser_sand = False
+        bullets_holdoff_sand = 50
+        
+    elif bullets_holdoff_sand == 0 and key: 
         bullet = Actor ('bulletsand2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -207,8 +221,14 @@ def shoot_bullet_sand(tank, key):
             level_up = True
 
 def shoot_bullet_blue(tank, key):
-    global bullets_holdoff_blue,level_up, tank_dealth
-    if bullets_holdoff_blue==0 and key:
+    global bullets_holdoff_blue,level_up, tank_dealth, has_laser_blue
+    
+    if has_laser_blue and key:
+        shoot_laser(tank,enemies, walls)
+        has_laser_blue = False
+        bullets_holdoff_blue = 50
+        
+    elif bullets_holdoff_blue==0 and key:
         bullet = Actor ('bulletblue2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -254,7 +274,30 @@ def shoot_bullet_blue(tank, key):
         
         if not enemies:
             level_up = True
-
+            
+def shoot_laser(tank,enemy_list, wall_list):
+    if tank.angle == 0:
+        beam_x, beam_y, dx, dy = tank.x + SIZE_TANK, tank.y, 10, 0
+    elif tank.angle == 180:
+        beam_x, beam_y, dx, dy = tank.x - SIZE_TANK, tank.y, -10, 0
+    elif tank.angle == 90:
+        beam_x, beam_y, dx, dy = tank.x, tank.y - SIZE_TANK, 0, -10
+    elif tank.angle == 270:
+        beam_x, beam_y, dx, dy = tank.x, tank.y +SIZE_TANK, 0 , 10
+    
+    for _ in range(80):
+        for enemy in enemy_list[:]:
+            if enemy.colliderect(Rect(beam_x,beam_y, 5, 5)):
+                enemy_list.remove(enemy)
+                death_tank = Actor('tank_dark')
+                death_tank.pos = enemy.pos
+                tank_dealth.append(death_tank)
+        for wall in wall_list[:]:
+            if wall.colliderect(Rect(beam_x,beam_y, 5, 5)):
+                wall_list.remove(wall)
+        beam_x += dx
+        beam_y += dy
+                        
 def enemy_set():
     global enemy_move_count, bullets_holdoff 
     for enemy in enemies:
@@ -281,7 +324,8 @@ def enemy_set():
             if enemy.collidelist(walls) != -1:
                 enemy.x = original_x
                 enemy.y = original_y
-                enemy_move_count = 0;
+
+                enemy_move_count = 0
 
         elif choice == 0:
                 enemy_move_count =30
@@ -407,10 +451,12 @@ def draw():
             tank.draw()
         for wall in walls:
             wall.draw()
-        for bullet in bullets_blue:
-            bullet.draw()
-        for bullet in bullets_sand:
-            bullet.draw()
+        if not has_laser_blue:
+            for bullet in bullets_blue:
+                bullet.draw()
+        if not has_laser_sand:
+            for bullet in bullets_sand:
+                bullet.draw()
         for enemy in enemies:
             enemy.draw()
         for bullet in enemy_bullets:
@@ -421,6 +467,8 @@ def draw():
             speed.draw()
         for death_tank in tank_dealth:
             death_tank.draw()
+        for laser in laser_list: laser.draw()
+
             
 start_game(number_of_enemies)
 pgzrun.go()
