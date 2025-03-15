@@ -4,6 +4,12 @@ import random
 WIDTH = 800
 HEIGHT = 600
 SIZE_TANK = 25
+button_level_up = Actor("level_up") # Rect(200, 400, 150, 50)  (x, y, width, height)
+button_quit = Actor("quit") #Rect(450, 400, 150, 50)
+button_level_up.pos = (275, 400)
+button_quit.pos = (525, 400)
+background_outside = Actor("background")
+
 walls = []
 bullets_blue = []
 bullets_sand = []
@@ -171,14 +177,14 @@ def tank_bullets_set():
 def shoot_bullet_sand(tank, key):
     global bullets_holdoff_sand,level_up, tank_dealth, has_laser_sand, boost_sand
     
-    if has_laser_sand and key:
+    if has_laser_sand and key and tank in our_tank:
         shoot_laser(tank,enemies, walls)
         has_laser_sand = False
         boost_sand = -2
         clock.schedule_unique(reset_boost_sand, 0.5)
         bullets_holdoff_sand = 50
         
-    elif bullets_holdoff_sand == 0 and key: 
+    elif bullets_holdoff_sand == 0 and key and tank in our_tank: 
         bullet = Actor ('bulletsand2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -228,14 +234,14 @@ def shoot_bullet_sand(tank, key):
 def shoot_bullet_blue(tank, key):
     global bullets_holdoff_blue,level_up, tank_dealth, has_laser_blue, boost_blue
     
-    if has_laser_blue and key:
+    if has_laser_blue and key and tank in our_tank:
         shoot_laser(tank,enemies, walls)
         has_laser_blue = False
         bullets_holdoff_blue = 50
         boost_blue = -2
         clock.schedule_unique(reset_boost_blue, 0.5)
         
-    elif bullets_holdoff_blue==0 and key:
+    elif bullets_holdoff_blue==0 and key and tank in our_tank:
         bullet = Actor ('bulletblue2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -437,16 +443,21 @@ def add_speed():
     
 add_laser()
 add_speed()
-def update():
+
+def on_mouse_down(pos):
     global game_over, level_up, level
-    if keyboard.r and game_over: #restart
+    if button_level_up.collidepoint(pos) and game_over: #restart
+        level = 0
         start_game(number_of_enemies)
-    elif keyboard.r and level_up: #level up
+    elif button_level_up.collidepoint(pos) and level_up: #level up
         level += 1
         start_game(number_of_enemies+2*level)
-    elif keyboard.q: #quit
+    elif button_quit.collidepoint(pos): #quit
         import sys
         sys.exit()
+
+def update():
+    global game_over, level_up
     if not game_over and not level_up: #regular update if gamr is not over
         tank_set()
         tank_bullets_set()
@@ -455,15 +466,23 @@ def update():
         
 def draw(): 
     if game_over:
-        screen.fill((0,0,0))
-        screen.draw.text('LOSE!', (260,250), color = (255,255,255), fontsize = 100)
-        screen.draw.text('press \'q\' to exit', (10,10), color = (255,255,255), fontsize = 20)
-        screen.draw.text('press \'r\' to restart the game', (10, HEIGHT - 10), color = (255,255,255), fontsize = 20)
+        background_outside.draw()
+        # Draw buttons
+        button_level_up.draw()
+        button_quit.draw()
+        screen.draw.text('RESTART', center=button_level_up.center, fontsize=30, color="white")
+        screen.draw.text('QUIT', center=button_quit.center, fontsize=30, color="white")
+
+        screen.draw.text('LOSE!', (300,250), color = (255,0,0), fontsize = 100)
     elif len(enemies)==0:
-        screen.fill((0,0,0))
-        screen.draw.text('YOU WON',(260,250),color=(255,255,255), fontsize=100)
-        screen.draw.text('press q to exit', (10,10), color=(255,255,255),fontsize=20)
-        screen.draw.text('press r to restart', (10, HEIGHT-10),color = (255,255,255),fontsize=20)
+        background_outside.draw()
+        # Draw buttons
+        button_level_up.draw()
+        button_quit.draw()
+        screen.draw.text("LEVEL UP", center=button_level_up.center, fontsize=30, color="white")
+        screen.draw.text("QUIT", center=button_quit.center, fontsize=30, color="white")
+
+        screen.draw.text('YOU WON',(240,250),color=(0,255,255), fontsize=100)
     else:
         background.draw()
         screen.draw.text('Level : ' + str(level) ,(WIDTH/2 -80, HEIGHT/2 -50),color = (255,255,100), fontsize = 100)
