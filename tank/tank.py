@@ -108,13 +108,14 @@ def move_tank_sand(tank, left, right, up, down):
     for speed in speed_list[:]:
         if speed.colliderect(tank_sand):
             speed_list.remove(speed)
-            boost_sand +=5
+            if (boost_sand != 2):
+                boost_sand += 2
+                clock.schedule_unique(reset_boost_sand, 5.0)
     
     for laser in laser_list[:]:
         if laser.colliderect(tank_sand):
             laser_list.remove(laser)
-            
-    
+           
 def move_tank_blue(tank, left, right, up, down): 
     global boost_blue
     original_x = tank.x
@@ -142,8 +143,10 @@ def move_tank_blue(tank, left, right, up, down):
     for speed in speed_list[:]:
         if speed.colliderect(tank_blue):
             speed_list.remove(speed)
-            boost_blue += 5
-            
+            if (boost_blue != 2):
+                boost_blue += 2
+                clock.schedule_unique(reset_boost_blue, 5.0)
+
     
     for laser in laser_list[:]:
         if laser.colliderect(tank_blue):
@@ -330,7 +333,14 @@ def enemy_bullets_set():
                 game_over = True 
                 enemies = []
                 break
-            
+
+def reset_boost_blue():
+    global boost_blue
+    boost_blue = 0
+
+def reset_boost_sand():
+    global boost_sand
+    boost_sand = 0          
             
 def new_laser():
     global laser_list
@@ -339,7 +349,6 @@ def new_laser():
     laser_list.append(laser_new)
     return
 
-    
 def add_laser():
     global game_over
     if not game_over:
