@@ -25,13 +25,19 @@ boost_sand = 0
 game_over = False
 level_up = False
 
+has_laser_blue = False
+has_laser_sand = False
+
 tank_blue = Actor('tank_blue')
 tank_sand = Actor('tank_sand')
 our_tank = [tank_blue, tank_sand]
 background = Actor('grass')
 
+kame = []
+
 def start_game(number_of_enemies):
-    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue
+    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue,has_laser_blue,has_laser_sand, kame
+
     game_over=False
     level_up = False
     enemies = []
@@ -47,6 +53,9 @@ def start_game(number_of_enemies):
     boost_sand = 0
     boost_blue = 0
     tank_dealth = []
+    has_laser_blue = False
+    has_laser_sand = False
+    kame = []
     
 # enemy tank
     for i in range(number_of_enemies):
@@ -82,7 +91,7 @@ def tank_set():
     move_tank_sand(tank_sand, keyboard.a,keyboard.d,keyboard.w, keyboard.s)
     
 def move_tank_sand(tank, left, right, up, down):
-    global boost_sand
+    global boost_sand, has_laser_sand
     original_x = tank.x
     original_y = tank.y
     if left:
@@ -115,10 +124,10 @@ def move_tank_sand(tank, left, right, up, down):
     for laser in laser_list[:]:
         if laser.colliderect(tank_sand):
             laser_list.remove(laser)
-            
-    
+            has_laser_sand = True
+
 def move_tank_blue(tank, left, right, up, down): 
-    global boost_blue
+    global boost_blue, has_laser_blue
     original_x = tank.x
     original_y = tank.y
     if left:
@@ -144,13 +153,15 @@ def move_tank_blue(tank, left, right, up, down):
     for speed in speed_list[:]:
         if speed.colliderect(tank_blue):
             speed_list.remove(speed)
+
             if (boost_blue != 2):
                 boost_blue += 2
                 clock.schedule_unique(reset_boost_blue, 5.0)
-    
+        
     for laser in laser_list[:]:
         if laser.colliderect(tank_blue):
             laser_list.remove(laser)
+            has_laser_blue = True
 
 #setup ally bullet
 def tank_bullets_set():
@@ -158,8 +169,16 @@ def tank_bullets_set():
     shoot_bullet_sand(tank_sand, keyboard.f)
     
 def shoot_bullet_sand(tank, key):
-    global bullets_holdoff_sand,level_up, tank_dealth
-    if bullets_holdoff_sand == 0 and key: 
+    global bullets_holdoff_sand,level_up, tank_dealth, has_laser_sand, boost_sand
+    
+    if has_laser_sand and key:
+        shoot_laser(tank,enemies, walls)
+        has_laser_sand = False
+        boost_sand = -2
+        clock.schedule_unique(reset_boost_sand, 0.5)
+        bullets_holdoff_sand = 50
+        
+    elif bullets_holdoff_sand == 0 and key: 
         bullet = Actor ('bulletsand2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -207,8 +226,16 @@ def shoot_bullet_sand(tank, key):
             level_up = True
 
 def shoot_bullet_blue(tank, key):
-    global bullets_holdoff_blue,level_up, tank_dealth
-    if bullets_holdoff_blue==0 and key:
+    global bullets_holdoff_blue,level_up, tank_dealth, has_laser_blue, boost_blue
+    
+    if has_laser_blue and key:
+        shoot_laser(tank,enemies, walls)
+        has_laser_blue = False
+        bullets_holdoff_blue = 50
+        boost_blue = -2
+        clock.schedule_unique(reset_boost_blue, 0.5)
+        
+    elif bullets_holdoff_blue==0 and key:
         bullet = Actor ('bulletblue2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -255,6 +282,43 @@ def shoot_bullet_blue(tank, key):
         if not enemies:
             level_up = True
 
+def remove_kame():
+    global kame
+    for kamejoko in kame:
+        kame.remove(kamejoko)
+
+def shoot_laser(tank,enemy_list, wall_list):
+    global level_up
+    
+    kame1 = Actor("kame1")
+    kame1.angle = tank.angle
+    if kame1.angle == 0:
+        kame1.pos = (tank.x + 200, tank.y)
+    elif kame1.angle == 180:
+        kame1.pos = (tank.x - 200, tank.y)
+    elif kame1.angle == 90:
+        kame1.pos = (tank.x, tank.y - 200)
+    elif kame1.angle ==270:
+        kame1.pos = (tank.x, tank.y + 200)
+    kame.append(kame1)
+    clock.schedule_unique(remove_kame, 0.5)
+    
+    for kamejoko in kame[:]:
+        wall_indices = kamejoko.collidelistall(walls)
+        for index in sorted(wall_indices, reverse=True):  # Delete from the end to avoid index shift
+            del walls[index]  
+
+        # Get all collided enemies
+        enemy_indices = kamejoko.collidelistall(enemies)
+        for index in sorted(enemy_indices, reverse=True):  # Delete from the end to avoid index shift
+            death_tank = Actor('tank_dark')
+            death_tank.pos = enemies[index].pos
+            tank_dealth.append(death_tank)  # Store destroyed enemy effect
+            del enemies[index]
+        
+        if not enemies:
+            level_up = True
+                        
 def enemy_set():
     global enemy_move_count, bullets_holdoff 
     for enemy in enemies:
@@ -281,7 +345,8 @@ def enemy_set():
             if enemy.collidelist(walls) != -1:
                 enemy.x = original_x
                 enemy.y = original_y
-                enemy_move_count = 0;
+
+                enemy_move_count = 0
 
         elif choice == 0:
                 enemy_move_count =30
@@ -336,11 +401,11 @@ def enemy_bullets_set():
 
 def reset_boost_blue():
     global boost_blue
-    boost_blue = 0
+    boost_blue = 0 
 
 def reset_boost_sand():
     global boost_sand
-    boost_sand = 0          
+    boost_sand = 0        
             
 def new_laser():
     global laser_list
@@ -353,7 +418,7 @@ def add_laser():
     global game_over
     if not game_over:
         new_laser()
-        clock.schedule(add_laser,20)
+        clock.schedule(add_laser,2)
     return
 
 def new_speed():
@@ -367,7 +432,7 @@ def add_speed():
     global game_over
     if not game_over:
         new_speed()
-        clock.schedule(add_speed,5)
+        clock.schedule(add_speed,15)
     return
     
 add_laser()
@@ -389,7 +454,6 @@ def update():
         enemy_bullets_set()
         
 def draw(): 
-    global level
     if game_over:
         screen.fill((0,0,0))
         screen.draw.text('LOSE!', (260,250), color = (255,255,255), fontsize = 100)
@@ -407,10 +471,12 @@ def draw():
             tank.draw()
         for wall in walls:
             wall.draw()
-        for bullet in bullets_blue:
-            bullet.draw()
-        for bullet in bullets_sand:
-            bullet.draw()
+        if not has_laser_blue:
+            for bullet in bullets_blue:
+                bullet.draw()
+        if not has_laser_sand:
+            for bullet in bullets_sand:
+                bullet.draw()
         for enemy in enemies:
             enemy.draw()
         for bullet in enemy_bullets:
@@ -421,6 +487,10 @@ def draw():
             speed.draw()
         for death_tank in tank_dealth:
             death_tank.draw()
+        for laser in laser_list:   
+            laser.draw()
+        for kamejoko in kame: 
+            kamejoko.draw()
             
 start_game(number_of_enemies)
 pgzrun.go()
