@@ -35,6 +35,7 @@ background = Actor('grass')
 
 def start_game(number_of_enemies):
     global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue,has_laser_blue,has_laser_sand
+
     game_over=False
     level_up = False
     enemies = []
@@ -319,6 +320,7 @@ def enemy_set():
             if enemy.collidelist(walls) != -1:
                 enemy.x = original_x
                 enemy.y = original_y
+
                 enemy_move_count = 0
 
         elif choice == 0:
@@ -455,6 +457,7 @@ def draw():
         for death_tank in tank_dealth:
             death_tank.draw()
         for laser in laser_list: laser.draw()
+
             
 start_game(number_of_enemies)
 pgzrun.go()
