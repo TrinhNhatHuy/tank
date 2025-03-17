@@ -4,6 +4,16 @@ import random
 WIDTH = 800
 HEIGHT = 600
 SIZE_TANK = 25
+button_level_up = Actor("level_up") # Rect(200, 400, 150, 50)  (x, y, width, height)
+button_quit = Actor("quit") #Rect(450, 400, 150, 50)
+button_level_up.pos = (275, 400)
+button_quit.pos = (525, 400)
+background_outside = Actor("background")
+background_outside.pos = (WIDTH/2 + 400, HEIGHT/2)
+
+instruction = Actor("instruction")
+instruction.pos = (150,100)
+
 walls = []
 bullets_blue = []
 bullets_sand = []
@@ -24,6 +34,10 @@ boost_sand = 0
 
 game_over = False
 level_up = False
+has_laser_blue = False
+has_laser_sand = False
+start_the_game = True
+run_piano = False
 
 has_laser_blue = False
 has_laser_sand = False
@@ -33,11 +47,13 @@ tank_sand = Actor('tank_sand')
 our_tank = [tank_blue, tank_sand]
 background = Actor('grass')
 
-def start_game(number_of_enemies):
-    global game_over, level_up, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue,has_laser_blue,has_laser_sand
+kame = []
 
-    game_over=False
-    level_up = False
+def start_game(number_of_enemies):
+    global run_piano, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue,has_laser_blue,has_laser_sand, kame
+    sounds.piano.stop()
+    run_piano = False
+
     enemies = []
     walls = []
     bullets_blue =[]
@@ -53,6 +69,7 @@ def start_game(number_of_enemies):
     tank_dealth = []
     has_laser_blue = False
     has_laser_sand = False
+    kame = []
     
 # enemy tank
     for i in range(number_of_enemies):
@@ -166,14 +183,17 @@ def tank_bullets_set():
     shoot_bullet_sand(tank_sand, keyboard.f)
     
 def shoot_bullet_sand(tank, key):
-    global bullets_holdoff_sand,level_up, tank_dealth, has_laser_sand
+    global bullets_holdoff_sand,level_up, tank_dealth, has_laser_sand, boost_sand
     
-    if has_laser_sand and key:
+    if has_laser_sand and key and tank in our_tank:
+        sounds.lazer.play()
         shoot_laser(tank,enemies, walls)
         has_laser_sand = False
+        boost_sand = -2
+        clock.schedule_unique(reset_boost_sand, 0.5)
         bullets_holdoff_sand = 50
         
-    elif bullets_holdoff_sand == 0 and key: 
+    elif bullets_holdoff_sand == 0 and key and tank in our_tank: 
         bullet = Actor ('bulletsand2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -202,6 +222,7 @@ def shoot_bullet_sand(tank, key):
     for bullet in bullets_sand[:]:
         walls_index = bullet.collidelist(walls)
         if walls_index != -1:
+            sounds.gun10.play()
             del walls[walls_index]
             bullets_sand.remove(bullet)
         
@@ -210,25 +231,31 @@ def shoot_bullet_sand(tank, key):
         
         enemy_index = bullet.collidelist(enemies)
         if enemy_index != -1:
+            sounds.exp.play()
             death_tank = Actor('tank_dark')
             death_tank.pos = enemies[enemy_index].pos
+            death_tank.angle = enemies[enemy_index].angle
             tank_dealth.append(death_tank)
             del enemies[enemy_index]
             bullets_sand.remove(bullet)
             continue
         
         if not enemies:
+            sounds.level_up.play()
             level_up = True
 
 def shoot_bullet_blue(tank, key):
-    global bullets_holdoff_blue,level_up, tank_dealth, has_laser_blue
+    global bullets_holdoff_blue,level_up, tank_dealth, has_laser_blue, boost_blue
     
-    if has_laser_blue and key:
+    if has_laser_blue and key and tank in our_tank:
+        sounds.lazer.play()
         shoot_laser(tank,enemies, walls)
         has_laser_blue = False
         bullets_holdoff_blue = 50
+        boost_blue = -2
+        clock.schedule_unique(reset_boost_blue, 0.5)
         
-    elif bullets_holdoff_blue==0 and key:
+    elif bullets_holdoff_blue==0 and key and tank in our_tank:
         bullet = Actor ('bulletblue2')
         bullet.angle = tank.angle
         if bullet.angle == 0:
@@ -257,6 +284,7 @@ def shoot_bullet_blue(tank, key):
     for bullet in bullets_blue[:]:
         walls_index = bullet.collidelist(walls)
         if walls_index != -1:
+            sounds.gun10.play()
             del walls[walls_index]
             bullets_blue.remove(bullet)
         
@@ -265,38 +293,57 @@ def shoot_bullet_blue(tank, key):
         
         enemy_index = bullet.collidelist(enemies)
         if enemy_index != -1:
+            sounds.exp.play()
             death_tank = Actor('tank_dark')
             death_tank.pos = enemies[enemy_index].pos
+            death_tank.angle = enemies[enemy_index].angle
             tank_dealth.append(death_tank)
             del enemies[enemy_index]
             bullets_blue.remove(bullet)
             continue
         
         if not enemies:
+            sounds.level_up.play()
             level_up = True
-            
+
+def remove_kame():
+    global kame
+    for kamejoko in kame:
+        kame.remove(kamejoko)
+
 def shoot_laser(tank,enemy_list, wall_list):
-    if tank.angle == 0:
-        beam_x, beam_y, dx, dy = tank.x + SIZE_TANK, tank.y, 10, 0
-    elif tank.angle == 180:
-        beam_x, beam_y, dx, dy = tank.x - SIZE_TANK, tank.y, -10, 0
-    elif tank.angle == 90:
-        beam_x, beam_y, dx, dy = tank.x, tank.y - SIZE_TANK, 0, -10
-    elif tank.angle == 270:
-        beam_x, beam_y, dx, dy = tank.x, tank.y +SIZE_TANK, 0 , 10
+    global level_up
     
-    for _ in range(80):
-        for enemy in enemy_list[:]:
-            if enemy.colliderect(Rect(beam_x,beam_y, 5, 5)):
-                enemy_list.remove(enemy)
-                death_tank = Actor('tank_dark')
-                death_tank.pos = enemy.pos
-                tank_dealth.append(death_tank)
-        for wall in wall_list[:]:
-            if wall.colliderect(Rect(beam_x,beam_y, 5, 5)):
-                wall_list.remove(wall)
-        beam_x += dx
-        beam_y += dy
+    kame1 = Actor("kame1")
+    kame1.angle = tank.angle
+    if kame1.angle == 0:
+        kame1.pos = (tank.x + 200, tank.y)
+    elif kame1.angle == 180:
+        kame1.pos = (tank.x - 200, tank.y)
+    elif kame1.angle == 90:
+        kame1.pos = (tank.x, tank.y - 200)
+    elif kame1.angle ==270:
+        kame1.pos = (tank.x, tank.y + 200)
+    kame.append(kame1)
+    clock.schedule_unique(remove_kame, 0.5)
+    
+    for kamejoko in kame[:]:
+        wall_indices = kamejoko.collidelistall(walls)
+        for index in sorted(wall_indices, reverse=True):  # Delete from the end to avoid index shift
+            del walls[index]  
+
+        # Get all collided enemies
+        enemy_indices = kamejoko.collidelistall(enemies)
+        for index in sorted(enemy_indices, reverse=True):  # Delete from the end to avoid index shift
+            death_tank = Actor('tank_dark')
+            death_tank.pos = enemies[index].pos
+            death_tank.angle = enemies[index].angle
+            tank_dealth.append(death_tank)  # Store destroyed enemy effect
+            del enemies[index]
+        
+        if not enemies:
+            sounds.level_up.play()
+            level_up = True
                         
 def enemy_set():
     global enemy_move_count, bullets_holdoff 
@@ -356,6 +403,7 @@ def enemy_bullets_set():
         for bullet in enemy_bullets[:]: #iterate over a copy of the list
             wall_index = bullet.collidelist(walls)
             if wall_index != -1:
+                sounds.gun10.play()
                 del walls[wall_index]
                 enemy_bullets.remove(bullet)
                 continue #skip further check for this bullet
@@ -366,25 +414,28 @@ def enemy_bullets_set():
 
             ally_index = bullet.collidelist(our_tank)
             if ally_index != -1:
+                sounds.exp.play()
                 death_tank = Actor('tank_dark')
                 death_tank.pos = our_tank[ally_index].pos
+                death_tank.angle = our_tank[ally_index].angle
                 tank_dealth.append(death_tank)
                 del our_tank[ally_index]
                 enemy_bullets.remove(bullet)
                 continue
             
             if not our_tank:
+                sounds.game_over.play()
                 game_over = True 
                 enemies = []
                 break
 
 def reset_boost_blue():
     global boost_blue
-    boost_blue = 0
+    boost_blue = 0 
 
 def reset_boost_sand():
     global boost_sand
-    boost_sand = 0          
+    boost_sand = 0        
             
 def new_laser():
     global laser_list
@@ -397,7 +448,7 @@ def add_laser():
     global game_over
     if not game_over:
         new_laser()
-        clock.schedule(add_laser,20)
+        clock.schedule(add_laser,2)
     return
 
 def new_speed():
@@ -413,19 +464,37 @@ def add_speed():
         new_speed()
         clock.schedule(add_speed,15)
     return
-    
 add_laser()
 add_speed()
-def update():
-    global game_over, level_up, level
-    if keyboard.r and game_over: #restart
+def play_piano():
+    sounds.piano.play()
+
+def on_mouse_down(pos):
+    global game_over, level_up, level, start_the_game
+    if start_the_game and button_level_up.collidepoint(pos): # start game
         start_game(number_of_enemies)
-    elif keyboard.r and level_up: #level up
+        start_the_game = False
+    elif button_level_up.collidepoint(pos) and game_over: #restart
+        level = 0
+        game_over = False
+        start_game(number_of_enemies)
+    elif button_level_up.collidepoint(pos) and level_up: #level up
         level += 1
-        start_game(number_of_enemies+2*level)
-    elif keyboard.q: #quit
+        level_up = False
+        start_game(number_of_enemies+2*level)    
+    elif button_quit.collidepoint(pos): #quit
         import sys
         sys.exit()
+def update():
+    global run_piano
+    if not run_piano and (start_the_game or game_over or len(enemies) == 0):
+        clock.schedule_unique(play_piano, 1.0)
+        run_piano = True
+    if (start_the_game or game_over or len(enemies) == 0):
+        background_outside.x -= 0.5
+        if background_outside.right == 800: 
+            background_outside.x = WIDTH/2 + 400 
+
     if not game_over and not level_up: #regular update if gamr is not over
         tank_set()
         tank_bullets_set()
@@ -433,17 +502,32 @@ def update():
         enemy_bullets_set()
         
 def draw(): 
-    global level
-    if game_over:
-        screen.fill((0,0,0))
-        screen.draw.text('LOSE!', (260,250), color = (255,255,255), fontsize = 100)
-        screen.draw.text('press \'q\' to exit', (10,10), color = (255,255,255), fontsize = 20)
-        screen.draw.text('press \'r\' to restart the game', (10, HEIGHT - 10), color = (255,255,255), fontsize = 20)
-    elif len(enemies)==0:
-        screen.fill((0,0,0))
-        screen.draw.text('YOU WON',(260,250),color=(255,255,255), fontsize=100)
-        screen.draw.text('press q to exit', (10,10), color=(255,255,255),fontsize=20)
-        screen.draw.text('press r to restart', (10, HEIGHT-10),color = (255,255,255),fontsize=20)
+    if start_the_game:
+        background_outside.draw()
+        screen.draw.text('TANK GAME', (WIDTH/2-200, HEIGHT/2-50), color = (255,25,100), fontsize = 100)
+        button_level_up.draw()
+        button_quit.draw()
+        screen.draw.text('START', center=button_level_up.center, fontsize=30, color="white")
+        screen.draw.text('QUIT', center=button_quit.center, fontsize=30, color="white")
+        instruction.draw()
+    elif game_over:
+        background_outside.draw()
+        # Draw buttons
+        button_level_up.draw()
+        button_quit.draw()
+        screen.draw.text('RESTART', center=button_level_up.center, fontsize=30, color="white")
+        screen.draw.text('QUIT', center=button_quit.center, fontsize=30, color="white")
+
+        screen.draw.text('LOSE!', (300,250), color = (255,0,0), fontsize = 100)
+    elif len(enemies) == 0:
+        background_outside.draw()
+        # Draw buttons
+        button_level_up.draw()
+        button_quit.draw()
+        screen.draw.text("LEVEL UP", center=button_level_up.center, fontsize=30, color="white")
+        screen.draw.text("QUIT", center=button_quit.center, fontsize=30, color="white")
+
+        screen.draw.text('YOU WON',(240,250),color=(0,255,255), fontsize=100)
     else:
         background.draw()
         screen.draw.text('Level : ' + str(level) ,(WIDTH/2 -80, HEIGHT/2 -50),color = (255,255,100), fontsize = 100)
@@ -467,8 +551,9 @@ def draw():
             speed.draw()
         for death_tank in tank_dealth:
             death_tank.draw()
-        for laser in laser_list: laser.draw()
+        for laser in laser_list:   
+            laser.draw()
+        for kamejoko in kame: 
+            kamejoko.draw()
 
-            
-start_game(number_of_enemies)
 pgzrun.go()
