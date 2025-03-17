@@ -39,6 +39,9 @@ has_laser_sand = False
 start_the_game = True
 run_piano = False
 
+has_laser_blue = False
+has_laser_sand = False
+
 tank_blue = Actor('tank_blue')
 tank_sand = Actor('tank_sand')
 our_tank = [tank_blue, tank_sand]
@@ -50,6 +53,7 @@ def start_game(number_of_enemies):
     global run_piano, enemies, bullets_blue, bullets_sand, bullets_holdoff, bullets_holdoff_blue, bullets_holdoff_sand, enemy_bullets,walls, tank_dealth, our_tank, speed_list,laser_list,boost_sand, boost_blue,has_laser_blue,has_laser_sand, kame
     sounds.piano.stop()
     run_piano = False
+
     enemies = []
     walls = []
     bullets_blue =[]
