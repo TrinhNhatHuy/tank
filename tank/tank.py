@@ -189,6 +189,7 @@ def start_game(number_of_enemies):
     global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,laser_list, kame, tank_sand, tank_blue
     sounds.piano.stop()
     run_piano = False
+
     enemies = []
     walls = []
     enemy_bullets = []
