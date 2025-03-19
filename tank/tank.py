@@ -83,7 +83,6 @@ class Tank:
                 hp_list.remove(health)
                 if self.hp <= self.max_hp - 10:
                     self.hp += 20
-                
 
     def shoot_bullet(self, key, bullet_color):
         global level_up, level_boss
@@ -126,6 +125,7 @@ class Tank:
                 if bullet.colliderect(tank_boss.image):
                     tank_boss.hp -= 10
                     sounds.collide_boss.play()
+                    
                     if tank_boss.hp <= 0 and not enemies:
                         level_boss = False
                     self.bullets.remove(bullet)
@@ -141,6 +141,7 @@ class Tank:
                         tank_is_dead(enemies, enemy_index)
                     self.bullets.remove(bullet)
                     continue
+                    
         else:
             for bullet in self.bullets[:]:
                 walls_index = bullet.collidelist(walls)
@@ -335,6 +336,7 @@ kame = []
 
 def start_game(number_of_enemies):
     global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,laser_list,hp_list, kame, tank_sand, tank_blue
+
     sounds.piano.stop()
     run_piano = False
 
@@ -348,8 +350,9 @@ def start_game(number_of_enemies):
     kame = []
 
 # ally tank
-    tank_blue = Tank('tank_blue', 30)
-    tank_sand = Tank('tank_sand', 30)
+
+    tank_blue = Tank('tank_blue', 100)
+    tank_sand = Tank('tank_sand', 100)
     our_tank = [tank_blue, tank_sand]
 
     tank_blue.image.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
@@ -361,8 +364,8 @@ def start_game(number_of_enemies):
 # enemy tank
     for i in range(number_of_enemies):
         enemy = Enemy('tank_red', 30 + level*10)
+
         posi = i*100 + 50
-        
         while (posi > WIDTH):
             posi -= WIDTH
         enemy.image.x = posi
@@ -385,6 +388,7 @@ def start_game(number_of_enemies):
 
 def start_boss():
     global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,hp_list,laser_list, kame, tank_sand, tank_blue, tank_boss
+
     sounds.piano.stop()
     run_piano = False
     enemies = []
@@ -502,6 +506,7 @@ def enemy_bullets_set():
         ally_index = bullet.collidelist([tank.image for tank in our_tank])
         if ally_index != -1:
             our_tank[ally_index].hp -= 20
+
             if our_tank[ally_index].hp <= 0:
                 sounds.exp.play()
                 tank_is_dead(our_tank, ally_index)
@@ -524,6 +529,7 @@ def tank_is_dead(list, index):
 
 def add_laser():
     global laser_list
+
     if not game_over:
         laser_new = Actor("lazer")
         laser_new.pos = (random.randint(0,16)*50 + 25, random.randint(0,12)*50 + 25)
@@ -601,6 +607,7 @@ def update():
         enemy_bullets_set()
         if level_boss:
             boss_set()
+
 
 def draw_hp_bar(tank, bar_length, bar_height):
     if tank.image.image == 'tank_boss':
