@@ -20,11 +20,12 @@ enemy_bullets = []
 enemies = []
 speed_list = []
 laser_list = []
+explosion_list = []
 hp_list = []
 death_tank_list = []
 
 number_of_enemies = 5
-level = 1
+level = 3
 direction_moving_background = 1
 
 game_over = False
@@ -44,172 +45,162 @@ class Tank:
         self.has_laser = False
 
     def move_tank(self, left, right, up, down):
-        original_x = self.image.x
-        original_y = self.image.y
-        if left and self in our_tank:
-            self.image.x = self.image.x - (2 + self.boost_speed)
-            self.image.angle =180
-        elif right and self in our_tank:
-            self.image.x = self.image.x + (2 + self.boost_speed)
-            self.image.angle = 0
-        elif up and self in our_tank:
-            self.image.y = self.image.y - (2 + self.boost_speed)
-            self.image.angle = 90
-        elif down and self in our_tank:
-            self.image.y =  self.image.y + (2 + self.boost_speed)
-            self.image.angle =270
-            
-        if self.image.collidelist(walls)!= -1:
-            self.image.x = original_x
-            self.image.y = original_y
-        if self.image.x < SIZE_TANK or self.image.x>(WIDTH-SIZE_TANK)or self.image.y < SIZE_TANK or self.image.y > (HEIGHT-SIZE_TANK):  
-            self.image.x = original_x
-            self.image.y = original_y
-            
+        original_pos = self.image.pos
+        movement = {
+            left: (-1, 0, 180),
+            right: (1, 0, 0),
+            up: (0, -1, 90),
+            down: (0, 1, 270)
+        }
+        for key, (dx, dy, angle) in movement.items():
+            if key and self in our_tank:
+                self.image.x += dx * (2 + self.boost_speed)
+                self.image.y += dy * (2 + self.boost_speed)
+                self.image.angle = angle
+                break
+
+        if self.image.collidelist(walls) != -1 or not (SIZE_TANK <= self.image.x <= WIDTH - SIZE_TANK and SIZE_TANK <= self.image.y <= HEIGHT - SIZE_TANK):
+            self.image.pos = original_pos
+
+        self._check_collisions()
+
+    def _check_collisions(self):
         for speed in speed_list[:]:
             if speed.colliderect(self.image):
                 speed_list.remove(speed)
-                if (self.boost_speed != 2):
+                if self.boost_speed != 2:
                     self.boost_speed += 2
                     clock.schedule_unique(self.reset_boost, 5.0)
-        
+
         for laser in laser_list[:]:
             if laser.colliderect(self.image):
                 laser_list.remove(laser)
                 self.has_laser = True
-                
+
         for health in hp_list[:]:
             if health.colliderect(self.image):
                 hp_list.remove(health)
-                if self.hp <= self.max_hp - 10:
-                    self.hp += 20
+                self.hp = min(self.max_hp, self.hp + 20)
 
     def shoot_bullet(self, key, bullet_color):
+        if key and self in our_tank:
+            if self.has_laser:
+                sounds.lazer.play()
+                self.shoot_laser()
+                self.has_laser = False
+                self.boost_speed = -2
+                clock.schedule_unique(self.reset_boost, 0.5)
+                self.bullets_holdoff = 50
+            elif self.bullets_holdoff == 0:
+                self._create_bullet(bullet_color)
+                self.bullets_holdoff = 20
+
+        self.bullets_holdoff = max(0, self.bullets_holdoff - 1)
+        self._update_bullets()
+
+    def _create_bullet(self, bullet_color):
+        bullet = Actor(bullet_color)
+        bullet.angle = self.image.angle
+        offset = {
+            0: (SIZE_TANK, 0),
+            180: (-SIZE_TANK, 0),
+            90: (0, -SIZE_TANK),
+            270: (0, SIZE_TANK)
+        }
+        dx, dy = offset[bullet.angle]
+        bullet.pos = (self.image.x + dx, self.image.y + dy)
+        self.bullets.append(bullet)
+
+    def _update_bullets(self):
+        for bullet in self.bullets[:]:
+            angle_rad = math.radians(bullet.angle)
+            bullet.x += 3 * math.cos(angle_rad)
+            bullet.y -= 3 * math.sin(angle_rad)
+
+            if not (0 <= bullet.x <= WIDTH and 0 <= bullet.y <= HEIGHT):
+                self.bullets.remove(bullet)
+                continue
+
+            self._check_bullet_collisions(bullet)
+
+    def _check_bullet_collisions(self, bullet):
         global level_up, level_boss
-        
-        if self.has_laser and key and self in our_tank:
-            sounds.lazer.play()
-            self.shoot_laser()
-            self.has_laser = False
-            self.boost_speed = -2
-            clock.schedule_unique(self.reset_boost, 0.5)
-            self.bullets_holdoff = 50
-            
-        elif self.bullets_holdoff == 0 and key and self in our_tank: 
-            bullet = Actor (bullet_color)
-            bullet.angle = self.image.angle
-            if bullet.angle == 0:
-                bullet.pos = (self.image.x + SIZE_TANK, self.image.y)
-            elif bullet.angle == 180:
-                bullet.pos = (self.image.x - SIZE_TANK, self.image.y)
-            elif bullet.angle == 90:
-                bullet.pos = (self.image.x, self.image.y - SIZE_TANK)
-            elif bullet.angle ==270:
-                bullet.pos = (self.image.x, self.image.y + SIZE_TANK)
-            self.bullets.append(bullet)
-            self.bullets_holdoff = 20
-        else:
-            self.bullets_holdoff = max(0, self.bullets_holdoff - 1)
-        
-        for bullet in self.bullets:
-            if bullet.angle == 0:
-                bullet.x += 3
-            if bullet.angle ==180:
-                bullet.x -= 3
-            if bullet.angle == 90:
-                bullet.y -= 3
-            if bullet.angle == 270:
-                bullet.y += 3
+
         if level_boss:
-            for bullet in self.bullets[:]:
-                if bullet.colliderect(tank_boss.image):
-                    tank_boss.hp -= 10
-                    sounds.collide_boss.play()
-                    
-                    if tank_boss.hp <= 0 and not enemies:
-                        level_boss = False
-                    self.bullets.remove(bullet)
-                    
-                if bullet.x < 0 or bullet.x > WIDTH or bullet.y < 0 or bullet.y >HEIGHT:
-                    self.bullets.remove(bullet)
-                
-                enemy_index = bullet.collidelist([enemy.image for enemy in enemies])
-                if enemy_index != -1:
-                    enemies[enemy_index].hp -= 10
-                    if enemies[enemy_index].hp <= 0:
-                        sounds.exp.play()
-                        tank_is_dead(enemies, enemy_index)
-                    self.bullets.remove(bullet)
-                    continue
-                    
-        else:
-            for bullet in self.bullets[:]:
-                walls_index = bullet.collidelist(walls)
-                if walls_index != -1:
-                    sounds.gun10.play()
-                    del walls[walls_index]
-                    self.bullets.remove(bullet)
-                
-                if bullet.x < 0 or bullet.x > WIDTH or bullet.y < 0 or bullet.y >HEIGHT:
-                    self.bullets.remove(bullet)
-                
-                enemy_index = bullet.collidelist([enemy.image for enemy in enemies])
-                if enemy_index != -1:
-                    enemies[enemy_index].hp -= 10
-                    if enemies[enemy_index].hp <= 0:
-                        sounds.exp.play()
-                        tank_is_dead(enemies, enemy_index)
-                    self.bullets.remove(bullet)
-                    continue
-                
-                if (not enemies) and (not level_boss):
-                    sounds.level_up.play()
-                    level_up = True
+            # Check collision with the boss
+            if bullet.colliderect(tank_boss.image) and boss_list:
+                tank_boss.hp -= 10
+                sounds.collide_boss.play()
+                if tank_boss.hp <= 0:
+                    display_explosion(boss_list, 0, 'explosion3')
+                    boss_list.remove(tank_boss)
+                self.bullets.remove(bullet)
+                return
+
+        # Check collision with walls
+        walls_index = bullet.collidelist(walls)
+        if walls_index != -1:
+            sounds.gun10.play()
+            del walls[walls_index]
+            self.bullets.remove(bullet)
+            return
+
+        # Check collision with enemies
+        enemy_index = bullet.collidelist([enemy.image for enemy in enemies])
+        if enemy_index != -1:
+            enemies[enemy_index].hp -= 10
+            if enemies[enemy_index].hp <= 0:
+                sounds.exp.play()
+                display_explosion(enemies, enemy_index, 'explosion4')
+                tank_is_dead(enemies, enemy_index)
+            self.bullets.remove(bullet)
+            return
 
     def shoot_laser(self):
-        global level_up, level_boss
-        
+        global level_up, level_boss, boss_list
         kame1 = Actor("kame1")
         kame1.angle = self.image.angle
-        if kame1.angle == 0:
-            kame1.pos = (self.image.x + 200, self.image.y)
-        elif kame1.angle == 180:
-            kame1.pos = (self.image.x - 200, self.image.y)
-        elif kame1.angle == 90:
-            kame1.pos = (self.image.x, self.image.y - 200)
-        elif kame1.angle ==270:
-            kame1.pos = (self.image.x, self.image.y + 200)
+        offset = {
+            0: (200, 0),
+            180: (-200, 0),
+            90: (0, -200),
+            270: (0, 200)
+        }
+        dx, dy = offset[kame1.angle]
+        kame1.pos = (self.image.x + dx, self.image.y + dy)
         kame.append(kame1)
         clock.schedule_unique(remove_kame, 0.5)
-        
+
         if level_boss:
-            if kame1.colliderect(tank_boss.image):
-                tank_boss.hp -= 50
-                if tank_boss.hp <= 0 and not enemies:
-                    sounds.exp.play()
-                    level_boss = False
-            enemy_indices = kame1.collidelistall([enemy.image for enemy in enemies])
-            for index in sorted(enemy_indices, reverse=True):  
+            self._laser_collisions_boss(kame1)
+        else:
+            self._laser_collisions_enemies(kame1)
+
+    def _laser_collisions_boss(self, kame1):
+        if kame1.colliderect(tank_boss.image) and boss_list:
+            tank_boss.hp -= 50
+            if tank_boss.hp <= 0:
+                display_explosion(boss_list, 0, 'explosion3')
+                boss_list.remove(tank_boss)
+        enemy_indices = kame1.collidelistall([enemy.image for enemy in enemies])
+        for index in sorted(enemy_indices, reverse=True):
+            enemies[index].hp -= 50
+            if enemies[index].hp <= 0:
+                display_explosion(enemies, index, 'explosion4')
+                tank_is_dead(enemies, index)
+
+    def _laser_collisions_enemies(self, kame1):
+        for kamejoko in kame[:]:
+            wall_indices = kamejoko.collidelistall(walls)
+            for index in sorted(wall_indices, reverse=True):
+                del walls[index]
+
+            enemy_indices = kamejoko.collidelistall([enemy.image for enemy in enemies])
+            for index in sorted(enemy_indices, reverse=True):
                 enemies[index].hp -= 50
                 if enemies[index].hp <= 0:
+                    display_explosion(enemies, index, 'explosion4')
                     tank_is_dead(enemies, index)
-                    
-        else:
-            for kamejoko in kame[:]:
-                wall_indices = kamejoko.collidelistall(walls)
-                for index in sorted(wall_indices, reverse=True):  # Delete from the end to avoid index shift
-                    del walls[index]  
-
-                # Get all collided enemies
-                enemy_indices = kamejoko.collidelistall([enemy.image for enemy in enemies])
-                for index in sorted(enemy_indices, reverse=True):  
-                    enemies[index].hp -= 50
-                    if enemies[index].hp <= 0:
-                        tank_is_dead(enemies, index)
-                
-                if (not enemies) and (not level_boss):
-                    sounds.level_up.play()
-                    level_up = True
 
     def reset_boost(self):
         self.boost_speed = 0
@@ -325,21 +316,20 @@ tank_blue = Tank('tank_blue', 100)
 tank_sand = Tank('tank_sand', 100)
 tank_blue.image.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
 tank_blue.image.angle = 90
-
 tank_sand.image.pos = (WIDTH/2 - 50, HEIGHT - SIZE_TANK)
 tank_sand.image.angle = 90
 our_tank = [tank_blue, tank_sand]
 tank_boss = Boss('tank_boss', 500)
+boss_list = [tank_boss]
+
 background = Actor('grass')
 
 kame = []
 
 def start_game(number_of_enemies):
-    global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,laser_list,hp_list, kame, tank_sand, tank_blue
-
+    global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,laser_list,hp_list, kame, tank_sand, tank_blue, explosion_list
     sounds.piano.stop()
     run_piano = False
-
     enemies = []
     walls = []
     enemy_bullets = []
@@ -348,9 +338,9 @@ def start_game(number_of_enemies):
     hp_list=[]
     death_tank_list = []
     kame = []
+    explosion_list = []
 
 # ally tank
-
     tank_blue = Tank('tank_blue', 100)
     tank_sand = Tank('tank_sand', 100)
     our_tank = [tank_blue, tank_sand]
@@ -363,7 +353,7 @@ def start_game(number_of_enemies):
 
 # enemy tank
     for i in range(number_of_enemies):
-        enemy = Enemy('tank_red', 30 + level*10)
+        enemy = Enemy('tank_red', 30 + level*5)
 
         posi = i*100 + 50
         while (posi > WIDTH):
@@ -387,8 +377,7 @@ def start_game(number_of_enemies):
     clock.schedule_unique(add_hp,10)
 
 def start_boss():
-    global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,hp_list,laser_list, kame, tank_sand, tank_blue, tank_boss
-
+    global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,hp_list,laser_list, kame, tank_sand, tank_blue, tank_boss, boss_list, explosion_list
     sounds.piano.stop()
     run_piano = False
     enemies = []
@@ -399,26 +388,27 @@ def start_boss():
     hp_list = []
     death_tank_list = []
     kame = []
+    explosion_list = []
 
 # ally tank
     tank_blue = Tank('tank_blue', 100)
     tank_sand = Tank('tank_sand', 100)
     our_tank = [tank_blue, tank_sand]
     tank_boss = Boss('tank_boss', 500)
+    boss_list = [tank_boss]
 
     tank_boss.image.pos = (WIDTH/2, 150)
     tank_boss.image.angle = 270
-
     tank_blue.image.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
     tank_blue.image.angle = 90
-    
     tank_sand.image.pos = (WIDTH/2 - 50, HEIGHT - SIZE_TANK)
     tank_sand.image.angle = 90
     
     clock.schedule_unique(add_laser, 20)
     clock.schedule_unique(add_speed, 15)
     clock.schedule_unique(add_hp,10)
-    clock.schedule_unique(add_enemy, 5)
+    if level_boss and boss_list:
+        clock.schedule_unique(add_enemy, 5)
 
 # set up ally tank
 def tank_set():
@@ -462,7 +452,6 @@ def enemy_set():
             if enemy.image.collidelist(walls) != -1:
                 enemy.image.x = original_x
                 enemy.image.y = original_y
-
                 enemy.move_count = 0
 
         elif choice == 0:
@@ -509,6 +498,7 @@ def enemy_bullets_set():
 
             if our_tank[ally_index].hp <= 0:
                 sounds.exp.play()
+                display_explosion(our_tank, ally_index, 'explosion4')
                 tank_is_dead(our_tank, ally_index)
             enemy_bullets.remove(bullet)
             continue
@@ -521,15 +511,28 @@ def enemy_bullets_set():
 
 def tank_is_dead(list, index):
     global death_tank_list
+    if index < 0 or index >= len(list) or not list:
+        return
     death_tank = Actor('tank_dark')
     death_tank.pos = list[index].image.pos
     death_tank.angle = list[index].image.angle
     death_tank_list.append(death_tank)
     del list[index]
 
+def display_explosion(list, index ,image):
+    global explosion_list
+    if index < 0 or index >= len(list) or not list:
+        return
+    explosion = Actor(image)
+    explosion.pos = list[index].image.pos
+    explosion_list.append(explosion)
+    clock.schedule_unique(remove_explosion, 0.5)
+
+def remove_explosion():
+    explosion_list.clear()
+
 def add_laser():
     global laser_list
-
     if not game_over:
         laser_new = Actor("lazer")
         laser_new.pos = (random.randint(0,16)*50 + 25, random.randint(0,12)*50 + 25)
@@ -557,7 +560,7 @@ def add_speed():
 
 def add_enemy():
     global enemies
-    if not game_over:
+    if not game_over and level_boss and boss_list:
         new_enemy = Enemy("tank_red", 20)
         new_enemy.image.pos = (tank_boss.image.x + random.randint(0,1)*150 -75, tank_boss.image.y+ random.randint(0,1)*150 - 75)
         enemies.append(new_enemy)
@@ -585,29 +588,35 @@ def on_mouse_down(pos):
         else:
             level += 1
             level_up = False
-            start_game(number_of_enemies+2*level-2)    
+            start_game(number_of_enemies+level-1)    
     elif button_quit.collidepoint(pos): #quit
         import sys
         sys.exit()
 
 def update():
-    global run_piano, direction_moving_background
+    global run_piano, direction_moving_background, level_up, level_boss
+    if not enemies and not level_boss and not level_up and not start_the_game:
+        sounds.level_up.play()
+        level_up = True
+    if level_boss and not boss_list:
+        level_boss = False
+
     if not run_piano and (start_the_game or game_over or not enemies and not level_boss):
         clock.schedule_unique(play_piano, 1.0)
         run_piano = True
+
     if (start_the_game or game_over or not enemies and not level_boss):
-        background_outside.x -= 0.5*direction_moving_background
-        if background_outside.right == 800 or background_outside.right == 1600: 
+        background_outside.x -= 0.5 * direction_moving_background
+        if background_outside.right == 800 or background_outside.right == 1600:
             direction_moving_background *= -1
 
-    if not game_over and not level_up: #regular update if gamr is not over\
+    if not game_over and not level_up:  # Regular update if the game is not over
         tank_set()
         tank_bullets_set()
         enemy_set()
         enemy_bullets_set()
-        if level_boss:
+        if boss_list and level_boss:
             boss_set()
-
 
 def draw_hp_bar(tank, bar_length, bar_height):
     if tank.image.image == 'tank_boss':
@@ -657,7 +666,8 @@ def draw():
         screen.clear()
         background.draw()
         screen.draw.text('Level : ' + str(level) ,(10, HEIGHT - 35),color = (255,255,100), fontsize = 40)
-    
+        for death_tank in death_tank_list:
+            death_tank.draw()
         for wall in walls:
             wall.draw()
         for tank in our_tank:
@@ -680,12 +690,13 @@ def draw():
             health.draw()
         for speed in speed_list:
             speed.draw()
-        for death_tank in death_tank_list:
-            death_tank.draw()
         for kamejoko in kame: 
             kamejoko.draw()
-        if level_boss:
-            tank_boss.image.draw()
+        for explosion in explosion_list:
+            explosion.draw()
+        if level_boss and boss_list:
+            for boss in boss_list:
+                boss.image.draw()
             draw_hp_bar(tank_boss,200, 10)
             for bullet in tank_boss.bullets:
                 bullet.draw()
