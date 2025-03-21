@@ -280,7 +280,7 @@ class Boss:
                 self._shoot_random_bullets()
 
         # Check for collisions or out-of-bounds
-        if self.image.x < 100 or self.image.x > (WIDTH - 100) or self.image.y < 100 or self.image.y > (HEIGHT - 100) or self.image.collidelist(walls) != -1:
+        if self.image.x < 100 or self.image.x > (WIDTH - 100) or self.image.y < 100 or self.image.y > (HEIGHT - 100) or self.image.collidelist(walls) != -1 or self.image.collidelist(irons) != -1:
             self.image.x, self.image.y = self.original_x, self.original_y
             self.move_count = 0
 
