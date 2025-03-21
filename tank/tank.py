@@ -2,20 +2,24 @@ import pgzrun
 import random
 import math
 
+# Constants
 WIDTH = 800
 HEIGHT = 600
 SIZE_TANK = 25
 SIZE_BLOCK = 50
-button_level_up = Actor("level_up") # Rect(200, 400, 150, 50)  (x, y, width, height)
-button_quit = Actor("quit") # Rect(450, 400, 150, 50)
-button_level_up.pos = (275, 400)
-button_quit.pos = (525, 400)
+BUTTON_LEVEL_UP_POS = (275, 400)
+BUTTON_QUIT_POS = (525, 400)
+BACKGROUND_OUTSIDE_POS = (WIDTH / 2 + 400, HEIGHT / 2)
+INSTRUCTION_POS = (150, 100)
+WALL_PROBABILITY = 50  # Probability of creating a wall (percentage)
+
+# Actors
+button_level_up = Actor("level_up")
+button_quit = Actor("quit")
 background_outside = Actor("background")
-background_outside.pos = (WIDTH/2 + 400, HEIGHT/2)
-
 instruction = Actor("instruction")
-instruction.pos = (150,100)
 
+# Global Variables
 walls = []
 irons = []
 enemy_bullets = []
@@ -25,6 +29,7 @@ laser_list = []
 explosion_list = []
 hp_list = []
 death_tank_list = []
+kame = []
 
 number_of_enemies = 5
 level = 3
@@ -35,6 +40,17 @@ level_up = False
 start_the_game = True
 run_piano = False
 level_boss = False
+
+# Variables to show text "Boss"
+show_boss_text = False  # Controls whether the "Boss" text is displayed
+boss_text_scale = 1.0   # Scale factor for the "Boss" text
+countdown_text = None   # Countdown text ("3", "2", "1", "Play")
+
+# Initialize button positions
+button_level_up.pos = BUTTON_LEVEL_UP_POS
+button_quit.pos = BUTTON_QUIT_POS
+background_outside.pos = BACKGROUND_OUTSIDE_POS
+instruction.pos = INSTRUCTION_POS
 
 class Tank:
     def __init__(self, image, hp):
@@ -239,80 +255,72 @@ class Boss:
         self.bullets_holdoff = 0
         self.move_count = 0
         self.bullets = []
-    
+
     def move_tank(self):
         global level_boss, game_over
-        original_x=self.image.x
-        original_y =self.image.y
-        choice = random.randint(0,2)
-
+        self.original_x, self.original_y = self.image.pos
         if self.move_count > 0:
             self.move_count -= 1
-            if self.image.angle == 0:
-                self.image.x += 2
-            elif self.image.angle == 180:
-                self.image.x -= 2
-            elif self.image.angle == 90:
-                self.image.y -=2
-            elif self.image.angle == 270:
-                self.image.y += 2
-                
-            if self.image.x < 100 or self.image.x > (WIDTH-100) or self.image.y < 100 or self.image.y > (HEIGHT-100):
-                self.image.x = original_x
-                self.image.y = original_y
-                self.move_count = 0
-                
-            if self.image.collidelist(walls) != -1 or self.image.collidelist(irons) != -1:
-                self.image.x = original_x
-                self.image.y = original_y
-
-                self.move_count = 0
-                
-
-        elif choice == 0:
+            movement = {
+                0: (2, 0),
+                180: (-2, 0),
+                90: (0, -2),
+                270: (0, 2)
+            }
+            dx, dy = movement.get(self.image.angle, (0, 0))
+            self.image.x += dx
+            self.image.y += dy
+        else:
+            choice = random.randint(0, 2)
+            if choice == 0:
                 self.move_count = 30
-        elif choice == 1: #enemy tank change direction
-                self.image.angle = random.choice([0,90,180,270])     
-        else: 
-            if self.bullets_holdoff == 0:
-                for _ in range(random.randint(1,5)):
-                    type_bullet = random.randint(0,10)
-                    if type_bullet == 0:
-                        bullet = Actor('bullet_boss_super')
-                    else:
-                        bullet = Actor('bullet_boss_normal')
-                    bullet.angle = self.image.angle + random.randint(-45,45)
-                    bullet.pos = self.image.pos
-                    
-                    # Check for collision with iron blocks
-                    if bullet.collidelist(irons) == -1:  # Only append if no collision with iron blocks
-                        self.bullets.append(bullet)
-                    
-                self.bullets_holdoff = 1
+            elif choice == 1:
+                self.image.angle = random.choice([0, 90, 180, 270])
             else:
-                self.bullets_holdoff = max(0, self.bullets_holdoff - 1)
-            
+                self._shoot_random_bullets()
+
+        # Check for collisions or out-of-bounds
+        if self.image.x < 100 or self.image.x > (WIDTH - 100) or self.image.y < 100 or self.image.y > (HEIGHT - 100) or self.image.collidelist(walls) != -1:
+            self.image.x, self.image.y = self.original_x, self.original_y
+            self.move_count = 0
+
+        # Check collision with ally tanks
         ally_index = self.image.collidelist([tank.image for tank in our_tank])
         if ally_index != -1:
-            hit_tank = our_tank[ally_index]
-            tank_is_dead(our_tank, ally_index)
-            sounds.exp.play()
-            if hit_tank in our_tank:
-                our_tank.remove(hit_tank)
-                if not our_tank:
-                    sounds.game_over.play()
-                    level_boss = False
-                    game_over = True
+            self._handle_tank_collision(ally_index)
+
+    def _handle_tank_collision(self, ally_index):
+        global level_boss, game_over
+        hit_tank = our_tank[ally_index]
+        tank_is_dead(our_tank, ally_index)
+        sounds.exp.play()
+        if hit_tank in our_tank:
+            our_tank.remove(hit_tank)
+            if not our_tank:
+                sounds.game_over.play()
+                level_boss = False
+                game_over = True
+
+    def _shoot_random_bullets(self):
+        if self.bullets_holdoff == 0:
+            for _ in range(random.randint(1, 5)):
+                bullet_type = 'bullet_boss_super' if random.randint(0, 10) == 0 else 'bullet_boss_normal'
+                bullet = Actor(bullet_type)
+                bullet.angle = self.image.angle + random.randint(-45, 45)
+                bullet.pos = self.image.pos
+                self.bullets.append(bullet)
+            self.bullets_holdoff = 1
+        else:
+            self.bullets_holdoff = max(0, self.bullets_holdoff - 1)
 
     def shoot_bullet(self):
         global game_over, our_tank, level_boss
-        for bullet in self.bullets:
+        for bullet in self.bullets[:]:
             angle_rad = math.radians(bullet.angle)
             bullet.x += 5 * math.cos(angle_rad)
             bullet.y -= 5 * math.sin(angle_rad)
-                
-        for bullet in self.bullets[:]: #iterate over a copy of the list
-            if bullet.x < 0 or bullet.x >WIDTH or bullet.y < 0 or bullet.y >HEIGHT:
+
+            if not (0 <= bullet.x <= WIDTH and 0 <= bullet.y <= HEIGHT):
                 self.bullets.remove(bullet)
                 continue
             
@@ -324,22 +332,21 @@ class Boss:
 
             ally_index = bullet.collidelist([tank.image for tank in our_tank])
             if ally_index != -1:
-                if bullet.image == 'bullet_boss_super':
-                    our_tank[ally_index].hp -= 50
-                    sounds.gun9.play()
-                elif bullet.image == 'bullet_boss_normal':
-                    our_tank[ally_index].hp -= 20
-                    sounds.gun9.play()
-                if our_tank[ally_index].hp <= 0:
-                    tank_is_dead(our_tank, ally_index)
-                self.bullets.remove(bullet)
-                continue
-            
-            if not our_tank:
-                sounds.game_over.play()
-                level_boss = False
-                game_over = True 
-                break      
+                self._handle_bullet_collision(bullet, ally_index)
+
+    def _handle_bullet_collision(self, bullet, ally_index):
+        global game_over, level_boss
+        damage = 50 if bullet.image == 'bullet_boss_super' else 20
+        our_tank[ally_index].hp -= damage
+        sounds.gun9.play()
+        if our_tank[ally_index].hp <= 0:
+            tank_is_dead(our_tank, ally_index)
+        self.bullets.remove(bullet)
+              
+        if not our_tank:
+            sounds.game_over.play()
+            level_boss = False
+            game_over = True
 
 class IronBlock:
     def __init__(self, x, y):
@@ -362,55 +369,62 @@ boss_list = [tank_boss]
 
 background = Actor('grass')
 
-kame = []
-
-def start_game(number_of_enemies):
-    global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,laser_list,hp_list, kame, tank_sand, tank_blue, explosion_list,irons
+# Reset shared game state variables
+def reset_game_state():
+    global run_piano, enemies, enemy_bullets, walls, death_tank_list, our_tank, speed_list, laser_list, hp_list, kame, explosion_list, irons
     sounds.piano.stop()
     run_piano = False
-    enemies = []
-    walls = []
-    enemy_bullets = []
-    speed_list = []
-    laser_list = []
-    hp_list=[]
-    death_tank_list = []
-    kame = []
-    explosion_list = []
+    enemies.clear()
+    walls.clear()
+    enemy_bullets.clear()
+    speed_list.clear()
+    laser_list.clear()
+    hp_list.clear()
+    death_tank_list.clear()
+    kame.clear()
+    explosion_list.clear()
     irons.clear()
 
-# ally tank
+# Initialize ally tanks
+def initialize_ally_tanks():
+    global tank_blue, tank_sand, our_tank
     tank_blue = Tank('tank_blue', 100)
     tank_sand = Tank('tank_sand', 100)
     our_tank = [tank_blue, tank_sand]
 
-    tank_blue.image.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
+    tank_blue.image.pos = (WIDTH / 2 + 50, HEIGHT - SIZE_TANK)
     tank_blue.image.angle = 90
-    
-    tank_sand.image.pos = (WIDTH/2 - 50, HEIGHT - SIZE_TANK)
+
+    tank_sand.image.pos = (WIDTH / 2 - 50, HEIGHT - SIZE_TANK)
     tank_sand.image.angle = 90
 
-# enemy tank
-    for i in range(number_of_enemies):
-        enemy = Enemy('tank_red', 30 + level*5)
+def create_walls():
+    for x in range(16):
+        for y in range(10):
+            if random.randint(0, 100) < WALL_PROBABILITY:
+                wall = Actor('wall')
+                wall.x = x * 50 + SIZE_TANK
+                wall.y = y * 50 + SIZE_TANK * 3
+                walls.append(wall)
 
-        posi = i*100 + 50
-        while (posi > WIDTH):
+# Start a regular game level
+def start_game(number_of_enemies):
+    reset_game_state()
+    initialize_ally_tanks()
+
+    # Initialize enemy tanks
+    for i in range(number_of_enemies):
+        enemy = Enemy('tank_red', 30 + level * 5)
+        posi = i * 100 + 50
+        while posi > WIDTH:
             posi -= WIDTH
         enemy.image.x = posi
         enemy.image.y = SIZE_TANK
-        enemy.image.angle =270
+        enemy.image.angle = 270
         enemies.append(enemy)
-    
-# set up environment
-    for x in range(16):
-        for y in range(10):
-            if random.randint(0,100) < 50:
-                wall = Actor('wall')
-                wall.x = x*50 + SIZE_TANK
-                wall.y = y*50 +SIZE_TANK*3
-                walls.append(wall)
-    
+
+    # Set up environment
+    create_walls()
     clock.schedule_unique(add_laser, 20)
     clock.schedule_unique(add_speed, 15)
     clock.schedule_unique(add_hp,10)
@@ -420,34 +434,49 @@ def add_iron_block(x, y):
     irons.append(block.image)
 
 
+# Start a boss level
 def start_boss():
-    global run_piano, enemies, enemy_bullets,walls, death_tank_list, our_tank, speed_list,hp_list,laser_list, kame, tank_sand, tank_blue, tank_boss, boss_list, explosion_list,irons
-    sounds.piano.stop()
-    run_piano = False
-    enemies = []
-    irons = []
-    walls = []
-    enemy_bullets = []
-    speed_list = []
-    laser_list = []
-    hp_list = []
-    death_tank_list = []
-    kame = []
-    explosion_list = []
+    global show_boss_text, boss_text_scale, countdown_text
+    reset_game_state()
+    clock.schedule_unique(initialize_ally_tanks, 3.0)
 
-# ally tank
-    tank_blue = Tank('tank_blue', 100)
-    tank_sand = Tank('tank_sand', 100)
-    our_tank = [tank_blue, tank_sand]
+    # Show "Boss" text with animation
+    show_boss_text = True
+    boss_text_scale = 1.0
+    countdown_text = None
+    clock.schedule_interval(_animate_boss_text, 0.1)  # Animate "Boss" text every 0.1s
+
+def _animate_boss_text():
+    global boss_text_scale, countdown_text
+    boss_text_scale += 0.5
+    if boss_text_scale >= 3.0:  # Once the text reaches maximum size
+        clock.unschedule(_animate_boss_text)
+        countdown_text = "3"
+        clock.schedule_unique(_start_countdown, 1.0)  # Start countdown after 1 second
+
+def _start_countdown():
+    global countdown_text
+    if countdown_text == "3":
+        countdown_text = "2"
+        clock.schedule_unique(_start_countdown, 1.0)
+    elif countdown_text == "2":
+        countdown_text = "1"
+        clock.schedule_unique(_start_countdown, 1.0)
+    elif countdown_text == "1":
+        countdown_text = "Play"
+        clock.schedule_unique(_initialize_boss, 1.0)
+
+def _initialize_boss():
+    global tank_boss, boss_list, show_boss_text, countdown_text
+    show_boss_text = False  # Stop showing the "Boss" text
+    countdown_text = None   # Clear the countdown text
+
+    # Initialize boss tank
     tank_boss = Boss('tank_boss', 500)
     boss_list = [tank_boss]
 
-    tank_boss.image.pos = (WIDTH/2, 150)
+    tank_boss.image.pos = (WIDTH / 2, 150)
     tank_boss.image.angle = 270
-    tank_blue.image.pos = (WIDTH/2 + 50, HEIGHT - SIZE_TANK)
-    tank_blue.image.angle = 90
-    tank_sand.image.pos = (WIDTH/2 - 50, HEIGHT - SIZE_TANK)
-    tank_sand.image.angle = 90
     
     # Place iron blocks at specific locations for the boss level.
     iron_positions = [
@@ -458,65 +487,60 @@ def start_boss():
     ]
     for pos in iron_positions:
         add_iron_block(pos[0], pos[1])
-    
+        
+    # Schedule power-ups and additional enemies
     clock.schedule_unique(add_laser, 20)
     clock.schedule_unique(add_speed, 15)
-    clock.schedule_unique(add_hp,10)
+    clock.schedule_unique(add_hp, 10)
     if level_boss and boss_list:
         clock.schedule_unique(add_enemy, 5)
 
 # set up ally tank
 def tank_set():
     tank_blue.move_tank(keyboard.left, keyboard.right, keyboard.up, keyboard.down)
-    tank_sand.move_tank(keyboard.a,keyboard.d,keyboard.w, keyboard.s)
+    tank_sand.move_tank(keyboard.a, keyboard.d, keyboard.w, keyboard.s)
 
-#setup ally bullet
 def tank_bullets_set():
     tank_blue.shoot_bullet(keyboard.l, 'bulletblue2')
     tank_sand.shoot_bullet(keyboard.f, 'bulletsand2')
 
 def remove_kame():
-    kame.clear()
+        kame.clear()
 
+# Enemy Management
 def boss_set():
     tank_boss.move_tank()
     tank_boss.shoot_bullet()
 
+# Handle enemy movement and shooting
 def enemy_set():
     for enemy in enemies:
-        original_x=enemy.image.x
-        original_y =enemy.image.y
-        choice = random.randint(0,2)
+        original_x, original_y = enemy.image.x, enemy.image.y
+        choice = random.randint(0, 2)
 
         if enemy.move_count > 0:
             enemy.move_count -= 1
-            if enemy.image.angle == 0:
-                enemy.image.x += 2
-            elif enemy.image.angle == 180:
-                enemy.image.x -= 2
-            elif enemy.image.angle == 90:
-                enemy.image.y -=2
-            elif enemy.image.angle == 270:
-                enemy.image.y += 2
-                
-            if (enemy.image.x < SIZE_TANK or enemy.image.x > (WIDTH - SIZE_TANK) or
-                enemy.image.y < SIZE_TANK or enemy.image.y > (HEIGHT - SIZE_TANK) or
-                enemy.image.collidelist(walls) != -1 or
-                enemy.image.collidelist(irons) != -1):  
-                enemy.image.x = original_x
-                enemy.image.y = original_y
-                enemy.move_count = 0
-                
-            if enemy.image.collidelist(walls) != -1:
-                enemy.image.x = original_x
-                enemy.image.y = original_y
-                enemy.move_count = 0
+            movement = {
+                0: (2, 0),
+                180: (-2, 0),
+                90: (0, -2),
+                270: (0, 2)
+            }
+            dx, dy = movement.get(enemy.image.angle, (0, 0))
+            enemy.image.x += dx
+            enemy.image.y += dy
 
+            # Check for collisions or out-of-bounds
+            if enemy.image.x < SIZE_TANK or enemy.image.x > (WIDTH - SIZE_TANK) or \
+               enemy.image.y < SIZE_TANK or enemy.image.y > (HEIGHT - SIZE_TANK) or \
+               enemy.image.collidelist(walls) != -1:
+                enemy.image.x, enemy.image.y = original_x, original_y
+                enemy.move_count = 0
         elif choice == 0:
-                enemy.move_count =30
-        elif choice == 1: #enemy tank change direction
-                enemy.image.angle = random.choice([0,90,180,270])     
-        else: #enemy fire
+            enemy.move_count = 30
+        elif choice == 1:
+            enemy.image.angle = random.choice([0, 90, 180, 270])
+        else:
             if enemy.bullets_holdoff == 0:
                 bullet = Actor('bulletred2')
                 bullet.angle = enemy.image.angle
@@ -526,19 +550,20 @@ def enemy_set():
             else:
                 enemy.bullets_holdoff = max(0, enemy.bullets_holdoff - 1)
 
+# Handle enemy bullet movement and collisions
 def enemy_bullets_set():
-    global enemies, game_over, our_tank
-    for bullet in enemy_bullets:
-        if bullet.angle == 0:
-            bullet.x +=5
-        if bullet.angle == 180:
-            bullet.x -= 5
-        if bullet.angle ==90 :
-            bullet.y -= 5
-        if bullet.angle == 270:
-            bullet.y +=5
-            
-    for bullet in enemy_bullets[:]: #iterate over a copy of the list
+    global game_over
+    for bullet in enemy_bullets[:]:
+        angle_rad = math.radians(bullet.angle)
+        bullet.x += 5 * math.cos(angle_rad)
+        bullet.y -= 5 * math.sin(angle_rad)
+
+        # Remove bullets out of bounds
+        if not (0 <= bullet.x <= WIDTH and 0 <= bullet.y <= HEIGHT):
+            enemy_bullets.remove(bullet)
+            continue
+
+        # Check collisions with walls
         wall_index = bullet.collidelist(walls)
         if wall_index != -1:
             sounds.gun10.play()
@@ -556,22 +581,23 @@ def enemy_bullets_set():
             enemy_bullets.remove(bullet)
             continue
 
+        # Check collisions with ally tanks
         ally_index = bullet.collidelist([tank.image for tank in our_tank])
         if ally_index != -1:
             our_tank[ally_index].hp -= 20
-
             if our_tank[ally_index].hp <= 0:
                 sounds.exp.play()
                 display_explosion(our_tank, ally_index, 'explosion4')
                 tank_is_dead(our_tank, ally_index)
             enemy_bullets.remove(bullet)
             continue
-        
+
+        # Check if all ally tanks are destroyed
         if not our_tank:
             sounds.game_over.play()
-            game_over = True 
-            enemies = []
-            break      
+            game_over = True
+            enemies.clear()
+            break
 
 def tank_is_dead(list, index):
     global death_tank_list
@@ -640,7 +666,7 @@ def on_mouse_down(pos):
         start_the_game = False
         start_game(number_of_enemies)
     elif button_level_up.collidepoint(pos) and game_over: #restart
-        level = 3
+        level = 1
         game_over = False
         start_game(number_of_enemies)
     elif button_level_up.collidepoint(pos) and level_up: #level up
@@ -679,7 +705,7 @@ def update():
         tank_bullets_set()
         enemy_set()
         enemy_bullets_set()
-        if boss_list and level_boss:
+        if boss_list and level_boss and not show_boss_text:
             boss_set()
 
 def draw_hp_bar(tank, bar_length, bar_height):
@@ -708,24 +734,36 @@ def draw():
         screen.draw.text('START', center=button_level_up.center, fontsize=30, color="white")
         screen.draw.text('QUIT', center=button_quit.center, fontsize=30, color="white")
         instruction.draw()
+        
     elif game_over:
         background_outside.draw()
-        # Draw buttons
         button_level_up.draw()
         button_quit.draw()
         screen.draw.text('RESTART', center=button_level_up.center, fontsize=30, color="white")
         screen.draw.text('QUIT', center=button_quit.center, fontsize=30, color="white")
 
         screen.draw.text('LOSE!', (300,250), color = (255,0,0), fontsize = 100)
+
     elif level_up and (not level_boss):
         background_outside.draw()
-        # Draw buttons
         button_level_up.draw()
         button_quit.draw()
         screen.draw.text("LEVEL UP", center=button_level_up.center, fontsize=30, color="white")
         screen.draw.text("QUIT", center=button_quit.center, fontsize=30, color="white")
 
         screen.draw.text('YOU WON',(240,250),color=(0,255,255), fontsize=100)
+        
+    elif show_boss_text:
+        # Display animated "Boss" text or countdown
+        screen.clear()
+        background.draw()
+        if countdown_text:
+            # Display countdown text
+            screen.draw.text(countdown_text, center=(WIDTH / 2, HEIGHT / 2), fontsize=100, color="red")
+        else:
+            # Display animated "Boss" text
+            screen.draw.text("BOSS", center=(WIDTH / 2, HEIGHT / 2), fontsize=int(50 * boss_text_scale), color="red")
+        
     else:
         screen.clear()
         background.draw()
