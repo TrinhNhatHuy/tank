@@ -6,6 +6,7 @@ import math
 WIDTH = 800
 HEIGHT = 600
 SIZE_TANK = 25
+SIZE_BLOCK = 50
 BUTTON_LEVEL_UP_POS = (275, 400)
 BUTTON_QUIT_POS = (525, 400)
 BACKGROUND_OUTSIDE_POS = (WIDTH / 2 + 400, HEIGHT / 2)
@@ -20,6 +21,7 @@ instruction = Actor("instruction")
 
 # Global Variables
 walls = []
+irons = []
 enemy_bullets = []
 enemies = []
 speed_list = []
@@ -75,9 +77,12 @@ class Tank:
                 self.image.angle = angle
                 break
 
-        if self.image.collidelist(walls) != -1 or not (SIZE_TANK <= self.image.x <= WIDTH - SIZE_TANK and SIZE_TANK <= self.image.y <= HEIGHT - SIZE_TANK):
+        in_bounds = (SIZE_TANK <= self.image.x <= WIDTH - SIZE_TANK) and \
+                    (SIZE_TANK <= self.image.y <= HEIGHT - SIZE_TANK)
+        
+        if self.image.collidelist(walls) != -1 or self.image.collidelist(irons) != -1 or not in_bounds:
             self.image.pos = original_pos
-
+            
         self._check_collisions()
 
     def _check_collisions(self):
@@ -160,6 +165,13 @@ class Tank:
             del walls[walls_index]
             self.bullets.remove(bullet)
             return
+        
+        #check collision with irons
+        irons_index = bullet.collidelist(irons)
+        if irons_index != -1:
+            sounds.gun10.play()
+            self.bullets.remove(bullet)
+            return
 
         # Check collision with enemies
         enemy_index = bullet.collidelist([enemy.image for enemy in enemies])
@@ -207,6 +219,12 @@ class Tank:
 
     def _laser_collisions_enemies(self, kame1):
         for kamejoko in kame[:]:
+            iron_indices = kamejoko.collidelistall(irons)
+            if iron_indices:
+                kame.remove(kamejoko)
+                continue # Do not process further collisions once an iron is hit
+                
+            
             wall_indices = kamejoko.collidelistall(walls)
             for index in sorted(wall_indices, reverse=True):
                 del walls[index]
@@ -305,6 +323,12 @@ class Boss:
             if not (0 <= bullet.x <= WIDTH and 0 <= bullet.y <= HEIGHT):
                 self.bullets.remove(bullet)
                 continue
+            
+            # Check for collision with iron blocks
+            iron_index = bullet.collidelist(irons)
+            if iron_index != -1:  # Collision detected
+                self.bullets.remove(bullet)  # Remove the bullet
+                continue
 
             ally_index = bullet.collidelist([tank.image for tank in our_tank])
             if ally_index != -1:
@@ -318,11 +342,20 @@ class Boss:
         if our_tank[ally_index].hp <= 0:
             tank_is_dead(our_tank, ally_index)
         self.bullets.remove(bullet)
-
+              
         if not our_tank:
             sounds.game_over.play()
             level_boss = False
             game_over = True
+
+class IronBlock:
+    def __init__(self, x, y):
+        self.image = Actor("iron")
+        self.image.pos = (x, y)
+    
+    def draw(self):
+        self.image.draw()
+
 
 tank_blue = Tank('tank_blue', 100)
 tank_sand = Tank('tank_sand', 100)
@@ -338,7 +371,7 @@ background = Actor('grass')
 
 # Reset shared game state variables
 def reset_game_state():
-    global run_piano, enemies, enemy_bullets, walls, death_tank_list, our_tank, speed_list, laser_list, hp_list, kame, explosion_list
+    global run_piano, enemies, enemy_bullets, walls, death_tank_list, our_tank, speed_list, laser_list, hp_list, kame, explosion_list, irons
     sounds.piano.stop()
     run_piano = False
     enemies.clear()
@@ -350,6 +383,7 @@ def reset_game_state():
     death_tank_list.clear()
     kame.clear()
     explosion_list.clear()
+    irons.clear()
 
 # Initialize ally tanks
 def initialize_ally_tanks():
@@ -393,7 +427,12 @@ def start_game(number_of_enemies):
     create_walls()
     clock.schedule_unique(add_laser, 20)
     clock.schedule_unique(add_speed, 15)
-    clock.schedule_unique(add_hp, 10)
+    clock.schedule_unique(add_hp,10)
+    
+def add_iron_block(x, y):
+    block = IronBlock(x, y)
+    irons.append(block.image)
+
 
 # Start a boss level
 def start_boss():
@@ -438,7 +477,17 @@ def _initialize_boss():
 
     tank_boss.image.pos = (WIDTH / 2, 150)
     tank_boss.image.angle = 270
-
+    
+    # Place iron blocks at specific locations for the boss level.
+    iron_positions = [
+        (WIDTH / 2 - 150, HEIGHT / 2 ),
+        (WIDTH / 2 - 150, HEIGHT / 2 + 50),
+        (WIDTH / 2 + 150, HEIGHT / 2 ),
+        (WIDTH / 2 + 150, HEIGHT / 2 + 50)
+    ]
+    for pos in iron_positions:
+        add_iron_block(pos[0], pos[1])
+        
     # Schedule power-ups and additional enemies
     clock.schedule_unique(add_laser, 20)
     clock.schedule_unique(add_speed, 15)
@@ -519,6 +568,16 @@ def enemy_bullets_set():
         if wall_index != -1:
             sounds.gun10.play()
             del walls[wall_index]
+            enemy_bullets.remove(bullet)
+            continue #skip further check for this bullet
+        
+        iron_index = bullet.collidelist(irons)
+        if iron_index != -1:
+            sounds.gun10.play()
+            enemy_bullets.remove(bullet)
+            continue
+        
+        if bullet.x < 0 or bullet.x >WIDTH or bullet.y < 0 or bullet.y >HEIGHT:
             enemy_bullets.remove(bullet)
             continue
 
@@ -713,6 +772,8 @@ def draw():
             death_tank.draw()
         for wall in walls:
             wall.draw()
+        for iron in irons:
+            iron.draw()
         for tank in our_tank:
             tank.image.draw()
             draw_hp_bar(tank, 40, 3)
