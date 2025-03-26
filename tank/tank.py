@@ -184,6 +184,17 @@ class Tank:
             self.bullets.remove(bullet)
             return
 
+        # Check collision with AI tanks
+        ai_index = bullet.collidelist([ai_tank.image for ai_tank in ai_tanks])
+        if ai_index != -1:
+            ai_tanks[ai_index].hp -= 10
+            if ai_tanks[ai_index].hp <= 0:
+                sounds.exp.play()
+                display_explosion(ai_tanks, ai_index, 'explosion4')
+                tank_is_dead(ai_tanks, ai_index)
+            self.bullets.remove(bullet)
+            return
+
     def shoot_laser(self):
         global level_up, level_boss, boss_list
         kame1 = Actor("kame1")
@@ -222,8 +233,7 @@ class Tank:
             iron_indices = kamejoko.collidelistall(irons)
             if iron_indices:
                 kame.remove(kamejoko)
-                continue # Do not process further collisions once an iron is hit
-                
+                continue   
             
             wall_indices = kamejoko.collidelistall(walls)
             for index in sorted(wall_indices, reverse=True):
@@ -235,6 +245,13 @@ class Tank:
                 if enemies[index].hp <= 0:
                     display_explosion(enemies, index, 'explosion4')
                     tank_is_dead(enemies, index)
+            
+            ai_indices = kamejoko.collidelistall([ai_tank.image for ai_tank in ai_tanks])
+            for index in sorted(ai_indices, reverse=True):
+                ai_tanks[index].hp -= 50
+                if ai_tanks[index].hp <= 0:
+                    display_explosion(ai_tanks, index, 'explosion4')
+                    tank_is_dead(ai_tanks, index)
 
     def reset_boost(self):
         self.boost_speed = 0
@@ -356,6 +373,189 @@ class IronBlock:
     def draw(self):
         self.image.draw()
 
+class AITank:
+    def __init__(self, image, hp):
+        self.image = Actor(image)
+        self.hp = hp
+        self.max_hp = hp
+        self.bullets = []
+        self.bullets_holdoff = 0
+        self.move_count = 0
+        self.stuck_count = 0 
+
+    # Move the AI tank towards the nearest player's tank
+    def move_tank(self):
+        if not our_tank:
+            return
+
+        # Find the nearest player's tank
+        nearest_tank = min(our_tank, key=lambda tank: self._distance_to(tank.image))
+        target_x = nearest_tank.image.x
+        target_y = nearest_tank.image.y
+
+        # Calculate the new direction using pathfinding
+        new_direction = self.calculate_new_direction(
+            walls, int(target_x / SIZE_BLOCK), int(target_y / SIZE_BLOCK)
+        )
+        if new_direction is not None:
+            self.image.angle = new_direction
+
+        # Move in the calculated direction
+        self.move_forwards()
+
+        # Check for collisions or out-of-bounds
+        if self.image.collidelist(walls) != -1 or self.image.collidelist(irons) != -1 or \
+           not (SIZE_TANK <= self.image.x <= WIDTH - SIZE_TANK and SIZE_TANK <= self.image.y <= HEIGHT - SIZE_TANK):
+            self.move_backwards()
+            self.stuck_count += 1
+            if self.stuck_count > 5:  # If stuck for 5 consecutive moves
+                self.image.angle = random.choice([0, 90, 180, 270])
+                self.stuck_count = 0  # Reset stuck counter
+        else:
+            self.stuck_count = 0  # Reset stuck counter if not stuck
+
+    # Shoot a bullet toward the nearest player's tank
+    def shoot_bullet(self):
+        if not our_tank or self.bullets_holdoff > 0:
+            self.bullets_holdoff = max(0, self.bullets_holdoff - 1)
+            return
+
+        # Find the nearest player's tank
+        nearest_tank = min(our_tank, key=lambda tank: self._distance_to(tank.image))
+        dx = nearest_tank.image.x - self.image.x
+        dy = nearest_tank.image.y - self.image.y
+
+        # Calculate the angle to the player's tank
+        angle = math.degrees(math.atan2(-dy, dx))
+
+        # Create and shoot a bullet
+        bullet = Actor('bulletgreen2')
+        bullet.angle = angle
+        bullet.pos = self.image.pos
+        self.bullets.append(bullet)
+        self.bullets_holdoff = 50  # Cooldown before the next shot
+
+    # Update the AI tank's bullets
+    def update_bullets(self):
+        for bullet in self.bullets[:]:
+            angle_rad = math.radians(self.image.angle)
+            bullet.x += 5 * math.cos(angle_rad)
+            bullet.y -= 5 * math.sin(angle_rad)
+
+            # Remove bullets out of bounds
+            if not (0 <= bullet.x <= WIDTH and 0 <= bullet.y <= HEIGHT):
+                self.bullets.remove(bullet)
+                continue
+
+            # Check collisions with walls
+            wall_index = bullet.collidelist(walls)
+            if wall_index != -1:
+                sounds.gun10.play()
+                del walls[wall_index]
+                self.bullets.remove(bullet)
+                continue
+                
+            #check collision with irons
+            iron_index = bullet.collidelist(irons)
+            if iron_index != -1:
+                self.bullets.remove(bullet)
+                continue
+
+            # Check collisions with player's tanks
+            ally_index = bullet.collidelist([tank.image for tank in our_tank])
+            if ally_index != -1:
+                our_tank[ally_index].hp -= 20
+                if our_tank[ally_index].hp <= 0:
+                    sounds.exp.play()
+                    display_explosion(our_tank, ally_index, 'explosion4')
+                    tank_is_dead(our_tank, ally_index)
+                self.bullets.remove(bullet)
+                continue
+
+    # Calculate the distance to a target Actor
+    def _distance_to(self, target):
+        dx = target.x - self.image.x
+        dy = target.y - self.image.y
+        return math.sqrt(dx**2 + dy**2)
+
+    def calculate_new_direction(self, walls, dest_x, dest_y):
+        map_grid = [[0 for _ in range(WIDTH // SIZE_BLOCK)] for _ in range(HEIGHT // SIZE_BLOCK)]
+
+        # Mark walls as obstacles
+        for wall in walls:
+            map_x = int(wall.x / SIZE_BLOCK)
+            map_y = int(wall.y / SIZE_BLOCK)
+            map_grid[map_y][map_x] = 1
+
+        # BFS queue
+        queue = [{
+            "x": int(self.image.x / SIZE_BLOCK),
+            "y": int(self.image.y / SIZE_BLOCK),
+            "moves": []
+        }]
+
+        while queue:
+            current = queue.pop(0)
+            if current["x"] == dest_x and current["y"] == dest_y:
+                if current["moves"]:
+                    return current["moves"][0]  # Return the first move in the path
+                return None
+
+            # Mark the current position as visited
+            map_grid[current["y"]][current["x"]] = 1
+
+            # Add neighbors to the queue
+            neighbors = self.add_neighbors(current, map_grid)
+            queue.extend(neighbors)
+
+        return None
+
+    # Add neighbors to the BFS queue
+    def add_neighbors(self, current, map_grid):
+        neighbors = []
+        directions = [
+            {"dx": -1, "dy": 0, "angle": 180},  # Left
+            {"dx": 1, "dy": 0, "angle": 0},    # Right
+            {"dx": 0, "dy": -1, "angle": 90},  # Up
+            {"dx": 0, "dy": 1, "angle": 270}   # Down
+        ]
+
+        for direction in directions:
+            new_x = current["x"] + direction["dx"]
+            new_y = current["y"] + direction["dy"]
+
+            if 0 <= new_x < WIDTH // SIZE_BLOCK and 0 <= new_y < HEIGHT // SIZE_BLOCK:
+                if map_grid[new_y][new_x] == 0:  # Not visited and not a wall
+                    new_moves = current["moves"] + [direction["angle"]]
+                    neighbors.append({"x": new_x, "y": new_y, "moves": new_moves})
+
+        return neighbors
+
+    # Move the tank forwards based on its current angle
+    def move_forwards(self):
+        
+        if self.image.angle == 0:  # Right
+            self.image.x += 1
+        elif self.image.angle == 180:  # Left
+            self.image.x -= 1
+        elif self.image.angle == 90:  # Up
+            self.image.y -= 1
+        elif self.image.angle == 270:  # Down
+            self.image.y += 1
+
+    # Move the tank backwards based on its current angle
+    def move_backwards(self):
+        if self.image.angle == 0:  # Right
+            self.image.x -= 1
+        elif self.image.angle == 180:  # Left
+            self.image.x += 1
+        elif self.image.angle == 90:  # Up
+            self.image.y += 1
+        elif self.image.angle == 270:  # Down
+            self.image.y -= 1
+
+# Add AI tanks to the game
+ai_tanks = []
 
 tank_blue = Tank('tank_blue', 100)
 tank_sand = Tank('tank_sand', 100)
@@ -371,9 +571,14 @@ background = Actor('grass')
 
 # Reset shared game state variables
 def reset_game_state():
-    global run_piano, enemies, enemy_bullets, walls, death_tank_list, our_tank, speed_list, laser_list, hp_list, kame, explosion_list, irons
+    """Reset all shared game state variables."""
+    global run_piano, enemies, enemy_bullets, walls, death_tank_list, our_tank, speed_list, laser_list, hp_list, kame, explosion_list, irons, ai_tanks, tank_boss, boss_list, level_boss
+
+    # Stop any ongoing sounds
     sounds.piano.stop()
     run_piano = False
+
+    # Clear all game objects
     enemies.clear()
     walls.clear()
     enemy_bullets.clear()
@@ -384,6 +589,19 @@ def reset_game_state():
     kame.clear()
     explosion_list.clear()
     irons.clear()
+    ai_tanks.clear()
+
+    # Reset ally tanks
+    initialize_ally_tanks()
+
+    # Reset boss tank only if it's a boss level
+    if level_boss:
+        tank_boss = Boss('tank_boss', 500)
+        boss_list = [tank_boss]
+        tank_boss.image.pos = (WIDTH / 2, 150)  # Reset position
+        tank_boss.image.angle = 270
+    else:
+        boss_list.clear()  # Ensure boss_list is empty during non-boss levels
 
 # Initialize ally tanks
 def initialize_ally_tanks():
@@ -428,7 +646,36 @@ def start_game(number_of_enemies):
     clock.schedule_unique(add_laser, 20)
     clock.schedule_unique(add_speed, 15)
     clock.schedule_unique(add_hp,10)
-    
+
+# Start a game level with AI tanks
+def start_game_with_ai(number_of_enemies, number_of_ai_tanks):
+    reset_game_state()
+    initialize_ally_tanks()
+
+    # Initialize enemy tanks
+    for i in range(number_of_enemies):
+        enemy = Enemy('tank_red', 30 + level * 5)
+        posi = i * 100 + 50
+        while posi > WIDTH:
+            posi -= WIDTH
+        enemy.image.x = posi
+        enemy.image.y = SIZE_TANK
+        enemy.image.angle = 270
+        enemies.append(enemy)
+
+    # Initialize AI tanks
+    for i in range(number_of_ai_tanks):
+        ai_tank = AITank('tank_green', 50)
+        ai_tank.image.x = random.randint(SIZE_TANK, WIDTH - SIZE_TANK)
+        ai_tank.image.y = SIZE_TANK
+        ai_tanks.append(ai_tank)
+
+    # Set up environment
+    create_walls()
+    clock.schedule_unique(add_laser, 20)
+    clock.schedule_unique(add_speed, 15)
+    clock.schedule_unique(add_hp, 10)
+
 def add_iron_block(x, y):
     block = IronBlock(x, y)
     irons.append(block.image)
@@ -436,9 +683,8 @@ def add_iron_block(x, y):
 
 # Start a boss level
 def start_boss():
-    global show_boss_text, boss_text_scale, countdown_text
+    global show_boss_text, boss_text_scale, countdown_text, boss_list
     reset_game_state()
-    clock.schedule_unique(initialize_ally_tanks, 3.0)
 
     # Show "Boss" text with animation
     show_boss_text = True
@@ -465,6 +711,7 @@ def _start_countdown():
     elif countdown_text == "1":
         countdown_text = "Play"
         clock.schedule_unique(_initialize_boss, 1.0)
+        clock.schedule_unique(initialize_ally_tanks, 1.0)
 
 def _initialize_boss():
     global tank_boss, boss_list, show_boss_text, countdown_text
@@ -533,7 +780,7 @@ def enemy_set():
             # Check for collisions or out-of-bounds
             if enemy.image.x < SIZE_TANK or enemy.image.x > (WIDTH - SIZE_TANK) or \
                enemy.image.y < SIZE_TANK or enemy.image.y > (HEIGHT - SIZE_TANK) or \
-               enemy.image.collidelist(walls) != -1:
+               enemy.image.collidelist(walls) != -1 or enemy.image.collidelist(irons) != -1:
                 enemy.image.x, enemy.image.y = original_x, original_y
                 enemy.move_count = 0
         elif choice == 0:
@@ -658,28 +905,43 @@ def add_enemy():
     return
 
 def play_piano():
-    sounds.piano.play()
+    """Play the piano sound if the game is in a non-playing state."""
+    if start_the_game or game_over or level_up:
+        sounds.piano.play()
 
 def on_mouse_down(pos):
     global game_over, level_up, level, start_the_game, level_boss
-    if start_the_game and button_level_up.collidepoint(pos): # start game
+
+    # start first game
+    if start_the_game and button_level_up.collidepoint(pos): 
         start_the_game = False
         start_game(number_of_enemies)
-    elif button_level_up.collidepoint(pos) and game_over: #restart
+
+    # restart game when game is over
+    elif button_level_up.collidepoint(pos) and game_over:
         level = 1
         game_over = False
+        level_up = False
+        level_boss = False
         start_game(number_of_enemies)
-    elif button_level_up.collidepoint(pos) and level_up: #level up
-        if level%3 == 0:
+
+    # level up
+    elif button_level_up.collidepoint(pos) and level_up:
+        if level % 3 == 0:
             level += 1
             level_up = False
             level_boss = True
             start_boss()
+        elif level >= 4:
+            level += 1
+            level_up = False
+            start_game_with_ai(number_of_enemies + level // 2, level - 4)
         else:
             level += 1
             level_up = False
-            start_game(number_of_enemies+level-1)    
-    elif button_quit.collidepoint(pos): #quit
+            start_game(number_of_enemies + level // 2)
+
+    elif button_quit.collidepoint(pos):  # Quit
         import sys
         sys.exit()
 
@@ -691,7 +953,8 @@ def update():
     if level_boss and not boss_list:
         level_boss = False
 
-    if not run_piano and (start_the_game or game_over or not enemies and not level_boss):
+    # Refine the condition for playing the piano sound
+    if not run_piano and (start_the_game or game_over or level_up):
         clock.schedule_unique(play_piano, 1.0)
         run_piano = True
 
@@ -705,6 +968,10 @@ def update():
         tank_bullets_set()
         enemy_set()
         enemy_bullets_set()
+        for ai_tank in ai_tanks:
+            ai_tank.move_tank()
+            ai_tank.shoot_bullet()
+            ai_tank.update_bullets()
         if boss_list and level_boss and not show_boss_text:
             boss_set()
 
@@ -726,6 +993,7 @@ def draw_hp_bar(tank, bar_length, bar_height):
     screen.draw.filled_rect(Rect((x - 20, y - 30), (hp_bar_width, bar_height)), hp_color)
 
 def draw(): 
+    # display the first screen
     if start_the_game:
         background_outside.draw()
         screen.draw.text('TANK GAME', (WIDTH/2-200, HEIGHT/2-50), color = (255,25,100), fontsize = 100)
@@ -734,7 +1002,8 @@ def draw():
         screen.draw.text('START', center=button_level_up.center, fontsize=30, color="white")
         screen.draw.text('QUIT', center=button_quit.center, fontsize=30, color="white")
         instruction.draw()
-        
+    
+    # display if game is over
     elif game_over:
         background_outside.draw()
         button_level_up.draw()
@@ -744,6 +1013,7 @@ def draw():
 
         screen.draw.text('LOSE!', (300,250), color = (255,0,0), fontsize = 100)
 
+    # display if game is won
     elif level_up and (not level_boss):
         background_outside.draw()
         button_level_up.draw()
@@ -752,18 +1022,17 @@ def draw():
         screen.draw.text("QUIT", center=button_quit.center, fontsize=30, color="white")
 
         screen.draw.text('YOU WON',(240,250),color=(0,255,255), fontsize=100)
-        
+    
+    # display warning before boss level
     elif show_boss_text:
-        # Display animated "Boss" text or countdown
         screen.clear()
         background.draw()
         if countdown_text:
-            # Display countdown text
             screen.draw.text(countdown_text, center=(WIDTH / 2, HEIGHT / 2), fontsize=100, color="red")
         else:
-            # Display animated "Boss" text
             screen.draw.text("BOSS", center=(WIDTH / 2, HEIGHT / 2), fontsize=int(50 * boss_text_scale), color="red")
-        
+    
+    # display the game
     else:
         screen.clear()
         background.draw()
@@ -780,6 +1049,11 @@ def draw():
         for enemy in enemies:
             enemy.image.draw()
             draw_hp_bar(enemy, 40, 3)
+        for ai_tank in ai_tanks:
+            ai_tank.image.draw()
+            draw_hp_bar(ai_tank, 40, 3)
+            for bullet in ai_tank.bullets:
+                bullet.draw()
         if not tank_blue.has_laser:
             for bullet in tank_blue.bullets:
                 bullet.draw()
